@@ -15,9 +15,10 @@
 
 void SegfaultHandler(int signal)
 {
+    // TODO: Add stack trace here
     std::cerr << "\n========== FATAL (" << signal << ") ==========\n";
     std::cerr << "==== C++ Stack Trace ====\n";
-    std::cerr << std::stacktrace::current(1);
+    std::cerr << "TODO";
     std::abort();
 }
 

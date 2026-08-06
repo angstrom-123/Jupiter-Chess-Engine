@@ -1,5 +1,5 @@
 #include "bitboard.h"
-#include <popcntintrin.h>
+#include <bit>
 
 void BitboardSet::StartPos()
 {
@@ -78,7 +78,7 @@ bool BitboardSet::Has(uint8_t index) const
 
 uint8_t BitboardSet::Count(Color::Value color, Piece::Value piece) const 
 {
-    return _mm_popcnt_u64(m_Bits[color][piece]);
+    return std::popcount(m_Bits[color][piece]);
 }
 
 Piece::Value BitboardSet::PieceInSquare(Color::Value color, uint8_t index) const 

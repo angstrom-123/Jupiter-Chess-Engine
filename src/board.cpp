@@ -1,6 +1,5 @@
 #include <charconv>
 #include <cstring>
-#include <immintrin.h>
 #include <iostream>
 #include <sstream>
 #include <string>

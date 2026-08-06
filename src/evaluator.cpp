@@ -1,6 +1,6 @@
 #include "evaluator.h"
 #include "movegen.h"
-#include <immintrin.h>
+#include <bit>
 #include <cmath>
 
 int64_t Evaluator::Evaluate(const BoardState& state)
@@ -49,14 +49,14 @@ int64_t Evaluator::PiecePositions(const BoardState& state)
 
         Bitboard friendlyoccupancy = state.pieces.OccupancyMask(friendly, piece);
         while (friendlyoccupancy) {
-            uint8_t index = _tzcnt_u64(friendlyoccupancy);
+            uint8_t index = std::countr_zero(friendlyoccupancy);
             piecePositionEval += m_PieceSquareTables.Get(friendly, piece, index, phase);
             friendlyoccupancy &= (friendlyoccupancy - 1);
         }
 
         Bitboard enemyoccupancy = state.pieces.OccupancyMask(enemy, piece);
         while (enemyoccupancy) {
-            uint8_t index = _tzcnt_u64(enemyoccupancy);
+            uint8_t index = std::countr_zero(enemyoccupancy);
             piecePositionEval -= m_PieceSquareTables.Get(enemy, piece, index, phase);
             enemyoccupancy &= (enemyoccupancy - 1);
         }

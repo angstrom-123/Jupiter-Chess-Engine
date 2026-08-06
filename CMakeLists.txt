@@ -6,9 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+# Don't use set because apparently apple doesn't like it
+string(APPEND CMAKE_CXX_FLAGS "-Wall -Wextra")
+string(APPEND CMAKE_CXX_FLAGS_DEBUG "-g")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 find_package(Python3 COMPONENTS Development REQUIRED)
 
@@ -30,7 +31,8 @@ set(SOURCES
     src/pythonModule.cpp
 )
 
-add_library(jupiter SHARED ${SOURCES})
+# Use module instead of shared so it compiles nicely on mac and linux
+add_library(jupiter MODULE ${SOURCES})
 
 target_include_directories(jupiter 
     PUBLIC
@@ -41,25 +43,20 @@ target_include_directories(jupiter
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# Link in stack trace library per compiler
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    target_link_libraries(jupiter PRIVATE stdc++_libbacktrace)
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(jupiter PRIVATE -stdlib=libstdc++)
-    target_link_options(jupiter PRIVATE -stdlib=libstdc++)
-    target_link_libraries(jupiter PRIVATE stdc++_libbacktrace dl backtrace)
-elseif (MSVC)
-    target_link_libraries(jupiter PRIVATE dbghelp)
-endif()
-
 target_link_libraries(jupiter PRIVATE ${Python3_LIBRARIES})
 
-target_compile_options(jupiter PRIVATE -msse4.2 -mpopcnt)
+# Try to force compilers to emit efficient intrinsics
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+    if(APPLE)
+        target_compile_options(jupiter PRIVATE -msse4.2 -mpopcnt -mbmi)
+    else()
+        target_compile_options(jupiter PRIVATE -march=native)
+    endif()
+endif()
 
+# Windows doesn't do this for us
 if(WIN32)
     set_target_properties(jupiter PROPERTIES SUFFIX ".pyd")
-else()
-    set_target_properties(jupiter PROPERTIES SUFFIX ".so")
 endif()
 
 set(PACKAGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/libjupiter")

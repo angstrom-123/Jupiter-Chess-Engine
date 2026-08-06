@@ -1,5 +1,5 @@
 #include "movegen.h"
-#include <immintrin.h>
+#include <bit>
 
 namespace movegen {
     void FindAttacks(const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
@@ -10,7 +10,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::PAWN);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindPawnAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -20,7 +20,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::KNIGHT);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindKnightAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -30,7 +30,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::BISHOP);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindBishopAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -40,7 +40,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::ROOK);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindRookAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -50,7 +50,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::QUEEN);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindQueenAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -60,7 +60,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::KING);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindKingAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -75,7 +75,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::PAWN);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindPawnQuiets(index, std::forward<const BoardState>(state), quietBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -85,7 +85,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::KNIGHT);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindKnightQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -95,7 +95,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::BISHOP);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindBishopQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -105,7 +105,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::ROOK);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindRookQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -115,7 +115,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::QUEEN);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindQueenQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -125,7 +125,7 @@ namespace movegen {
         {
             Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::KING);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 FindKingQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
                 occupancy &= (occupancy - 1);
             }
@@ -142,7 +142,7 @@ namespace movegen {
         attacks &= (state.pieces.OccupancyMask(Color::Opposite(state.turn)) | enPassantBit);
         
         while (attacks) {
-            uint8_t toIndex = _tzcnt_u64(attacks);
+            uint8_t toIndex = std::countr_zero(attacks);
             uint64_t toBit = 1ul << toIndex;
             if (toBit & backRankMask) {
                 // Promotion
@@ -190,7 +190,7 @@ namespace movegen {
         attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
 
         while (attacks) {
-            uint8_t toIndex = _tzcnt_u64(attacks);
+            uint8_t toIndex = std::countr_zero(attacks);
             attackBuffer.EmplaceBack(index, toIndex, Piece::KNIGHT, Piece::Invalid());
             attacks &= (attacks - 1);
         }
@@ -202,7 +202,7 @@ namespace movegen {
         attacks &= ~state.pieces.OccupancyMask();
 
         while (attacks) {
-            uint8_t toIndex = _tzcnt_u64(attacks);
+            uint8_t toIndex = std::countr_zero(attacks);
             quietBuffer.EmplaceBack(index, toIndex, Piece::KNIGHT, Piece::Invalid());
             attacks &= (attacks - 1);
         }
@@ -215,7 +215,7 @@ namespace movegen {
         attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
 
         while (attacks) {
-            uint8_t toIndex = _tzcnt_u64(attacks);
+            uint8_t toIndex = std::countr_zero(attacks);
             attackBuffer.EmplaceBack(index, toIndex, Piece::KING, Piece::Invalid());
             attacks &= (attacks - 1);
         }
@@ -229,7 +229,7 @@ namespace movegen {
             attacks &= ~state.pieces.OccupancyMask();
 
             while (attacks) {
-                uint8_t toIndex = _tzcnt_u64(attacks);
+                uint8_t toIndex = std::countr_zero(attacks);
                 quietBuffer.EmplaceBack(index, toIndex, Piece::KING, Piece::Invalid());
                 attacks &= (attacks - 1);
             }
@@ -282,7 +282,7 @@ namespace movegen {
         attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
 
         while (attacks) {
-            uint8_t toIndex = _tzcnt_u64(attacks);
+            uint8_t toIndex = std::countr_zero(attacks);
             attackBuffer.EmplaceBack(index, toIndex, piece, Piece::Invalid());
             attacks &= (attacks - 1);
         }
@@ -294,7 +294,7 @@ namespace movegen {
         attacks &= ~state.pieces.OccupancyMask();
 
         while (attacks) {
-            uint8_t toIndex = _tzcnt_u64(attacks);
+            uint8_t toIndex = std::countr_zero(attacks);
             quietBuffer.EmplaceBack(index, toIndex, piece, Piece::Invalid());
             attacks &= (attacks - 1);
         }

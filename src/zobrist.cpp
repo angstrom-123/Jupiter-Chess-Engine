@@ -3,7 +3,7 @@
 #include "rng.h"
 
 #include <cassert>
-#include <immintrin.h>
+#include <bit>
 
 Zobrist::Zobrist()
 {
@@ -27,7 +27,7 @@ ZobristKey Zobrist::ComputeKey(const BoardState& state) const
             Piece::Value piece = static_cast<Piece::Value>(j);
             Bitboard occupancy = state.pieces.OccupancyMask(color, piece);
             while (occupancy) {
-                uint8_t index = _tzcnt_u64(occupancy);
+                uint8_t index = std::countr_zero(occupancy);
                 key ^= m_Randoms[offset + index];
                 occupancy &= (occupancy - 1);
             }

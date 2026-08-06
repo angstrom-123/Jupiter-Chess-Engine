@@ -27,7 +27,7 @@ board.set_time_control(seconds, increment)
 # ========== Search for best move ==========
 
 # 10 seconds left
-time_remaining_ms: int = 10000
+time_remaining_ms: int = 100000
 
 # Long algebraic notation (e.g. e2e4)
 best_move: str = board.go(time_remaining_ms)

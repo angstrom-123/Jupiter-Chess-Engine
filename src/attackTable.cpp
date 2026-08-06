@@ -3,10 +3,9 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <immintrin.h>
 #include <iostream>
 #include <iterator>
-#include <popcntintrin.h>
+#include <bit>
 #include <array>
 
 const std::array<int8_t[2], 2> PAWN_ATTACKS = {{ { 1, 1 }, { -1, 1 } }}; // Subject to direction
@@ -151,7 +150,7 @@ void AttackTable::GenerateSliderTables()
         // Rook
         {
             m_RookData.masks[i] = GenerateSliderMask(i, ROOK_ATTACKS);
-            m_RookData.shifts[i] = 64 - _mm_popcnt_u64(m_RookData.masks[i]);
+            m_RookData.shifts[i] = 64 - std::popcount(m_RookData.masks[i]);
             if (!m_MagicsLoadedFromFile)
                 m_RookData.magics[i] = FindMagic(i, rng, Piece::ROOK);
 
@@ -168,7 +167,7 @@ void AttackTable::GenerateSliderTables()
         // Bishop
         {
             m_BishopData.masks[i] = GenerateSliderMask(i, BISHOP_ATTACKS);
-            m_BishopData.shifts[i] = 64 - _mm_popcnt_u64(m_BishopData.masks[i]);
+            m_BishopData.shifts[i] = 64 - std::popcount(m_BishopData.masks[i]);
             if (!m_MagicsLoadedFromFile)
                 m_BishopData.magics[i] = FindMagic(i, rng, Piece::BISHOP);
 
@@ -245,12 +244,12 @@ Bitboard AttackTable::FindMagic(uint8_t index, XorShift64& rng, Piece::Value pie
         uint64_t random;
         do {
             random = rng.Next() & rng.Next() & rng.Next();
-        } while (_mm_popcnt_u64(random) < 6);
+        } while (std::popcount(random) < 6);
         return random;
     };
 
     Bitboard mask = data.masks[index];
-    uint8_t bitCount = _mm_popcnt_u64(mask); 
+    uint8_t bitCount = std::popcount(mask); 
 
     Buffer<Bitboard, 1ul << 12> occupancies;
     Bitboard sub = mask;

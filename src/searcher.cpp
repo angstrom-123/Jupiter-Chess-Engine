@@ -9,7 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <ctime>
-#include <immintrin.h>
+#include <bit>
 #include <iostream>
 #include <utility>
 
@@ -521,7 +521,7 @@ void Searcher::UnmakeMove(MoveData moveData, BoardState& state)
 
 bool Searcher::SquareUnderAttack(uint64_t bit, Color::Value color, const BoardState& state)
 {
-    uint8_t index = _tzcnt_u64(bit);
+    uint8_t index = std::countr_zero(bit);
     Color::Value enemy = Color::Opposite(color);
     Bitboard occupancy = state.pieces.OccupancyMask();
 
@@ -680,7 +680,7 @@ int64_t Searcher::SEE(Move move, const BoardState& state)
         for (uint8_t i = Piece::PAWN; i < Piece::MAX_ENUM; i++) {
             Bitboard attackerOccupancy = attackers[turn][i];
             if (attackerOccupancy) {
-                from = _tzcnt_u64(attackerOccupancy);
+                from = std::countr_zero(attackerOccupancy);
                 attacker = static_cast<Piece::Value>(i);
                 attackers[turn][i] &= (attackerOccupancy - 1);
                 break;
