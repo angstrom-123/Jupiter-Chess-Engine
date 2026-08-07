@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 
-from typing_extensions import override
+from typing import override
 
 from framework.base_engine import BaseEngine, TimeControl
 
 from .build.libjupiter import Board
 
 class Jupiter(BaseEngine):
-    name: str = "Jupiter"
     board: Board | None = None 
 
     @override
