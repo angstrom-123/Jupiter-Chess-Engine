@@ -21,7 +21,7 @@ Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRe
     uint64_t startMs = chrono::time_point_cast<chrono::milliseconds>(startPoint).time_since_epoch().count();
 
     float m = std::max(10l, 50 - static_cast<int64_t>(state.halfMoves) / 2);
-    float i = std::max(0l, static_cast<int64_t>(m_TimeControlIncrement) - 1) * 1000;
+    float i = std::max(0l, static_cast<int64_t>(m_TimeControlIncrement) - 2) * 1000.0;
     float c = 1.0; // TODO: Set this complexity somehow, and implement search extensions
     uint64_t targetTimeMs = ((msRemaining / m) * c) + i;
 
@@ -186,11 +186,11 @@ int64_t Searcher::Search(SearchInfo&& info)
         if (lookup.depth >= info.depth) {
             int64_t score = lookup.score;
 
-            if (score > MATE_THRESOLD) 
-                score += info.ply;
-
-            if (score < -MATE_THRESOLD) 
+            if (score > MATE_THRESHOLD) 
                 score -= info.ply;
+
+            if (score < -MATE_THRESHOLD) 
+                score += info.ply;
 
             if (lookup.nodeType == NodeType::LOWER_BOUND)
                 info.alpha = std::max(info.alpha, score);
@@ -271,7 +271,7 @@ int64_t Searcher::Search(SearchInfo&& info)
         }
     }
 
-    if (max == -INT64_MAX) {
+    if (!Move::IsValid(bestMove)) {
         Bitboard king = info.state.pieces.OccupancyMask(info.state.turn, Piece::KING);
         if (SquareUnderAttack(king, Color::Opposite(info.state.turn), info.state)) 
             max = -MATE_EVAL + info.ply; // Checkmate
@@ -323,11 +323,11 @@ int64_t Searcher::Quiesce(QuiesceInfo&& info)
 
         int64_t score = lookup.score;
 
-        if (score > MATE_THRESOLD) 
-            score += info.ply;
-
-        if (score < -MATE_THRESOLD) 
+        if (score > MATE_THRESHOLD) 
             score -= info.ply;
+
+        if (score < -MATE_THRESHOLD) 
+            score += info.ply;
 
         if (lookup.nodeType == NodeType::LOWER_BOUND)
             info.alpha = std::max(info.alpha, score);

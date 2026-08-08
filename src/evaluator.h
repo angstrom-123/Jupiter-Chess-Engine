@@ -5,7 +5,7 @@
 #include <cstdint>
 
 const int64_t MATE_EVAL = 100'000'000;
-const int64_t MATE_THRESOLD = 99'000'000;
+const int64_t MATE_THRESHOLD = 99'000'000;
 
 struct SEE {
     typedef enum {
