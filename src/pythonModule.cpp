@@ -10,15 +10,16 @@
 
 #include "libjupiter/board.h"
 #include "move.h"
+#include "stackTrace.h"
 
 // Wrappers
 
 void SegfaultHandler(int signal)
 {
-    // TODO: Add stack trace here
-    std::cerr << "\n========== FATAL (" << signal << ") ==========\n";
-    std::cerr << "==== C++ Stack Trace ====\n";
-    std::cerr << "TODO";
+    JUPITER_TRACE();
+
+    std::cerr << "\n=== FATAL (" << signal << ") ===\n";
+    StackTracer::PrintTrace();
     std::abort();
 }
 
@@ -30,12 +31,16 @@ namespace py {
 
     static void BoardDealloc(Board *self)
     {
+        JUPITER_TRACE();
+
         delete self->board;
         Py_TYPE(self)->tp_free(reinterpret_cast<PyObject *>(self));
     }
 
     static PyObject *BoardNew(PyTypeObject *type, PyObject *args, PyObject *kwards)
     {
+        JUPITER_TRACE();
+
         Board *self = reinterpret_cast<Board *>(type->tp_alloc(type, 0));
         if (self)
             self->board = nullptr;
@@ -44,6 +49,8 @@ namespace py {
 
     static int BoardInit(Board *self, PyObject *args, PyObject *kwargs)
     {
+        JUPITER_TRACE();
+
         char *fen = nullptr;
         if (!PyArg_ParseTuple(args, "|s", &fen))
             return -1;
@@ -53,10 +60,10 @@ namespace py {
 
     // Methods
 
-    // NOTE: Use Py_RETURN_NONE macro to return nothing
-
     static PyObject *BoardRepr(Board *self)
     {
+        JUPITER_TRACE();
+
         if (!self->board)
             return nullptr;
         std::string result;
@@ -66,6 +73,8 @@ namespace py {
 
     static PyObject *BoardHasError(Board *self, PyObject *args)
     {
+        JUPITER_TRACE();
+
         if (!self->board)
             return nullptr;
         return PyBool_FromLong(self->board->HasError());
@@ -73,6 +82,8 @@ namespace py {
 
     static PyObject *BoardGetError(Board *self, PyObject *args)
     {
+        JUPITER_TRACE();
+
         if (!self->board)
             return nullptr;
         const char *error = self->board->GetError();
@@ -83,6 +94,8 @@ namespace py {
 
     static PyObject *BoardGo(Board *self, PyObject *args)
     {
+        JUPITER_TRACE();
+
         if (!self->board)
             return nullptr;
         uint64_t ms;
@@ -94,6 +107,8 @@ namespace py {
 
     static PyObject *BoardMakeMove(Board *self, PyObject *args)
     {
+        JUPITER_TRACE();
+
         if (!self->board)
             return nullptr;
         char *lan = nullptr;
@@ -109,6 +124,8 @@ namespace py {
 
     static PyObject *BoardSetTimeControl(Board *self, PyObject *args)
     {
+        JUPITER_TRACE();
+
         if (!self->board)
             return nullptr;
         uint64_t seconds;

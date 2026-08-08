@@ -3,6 +3,8 @@
 
 void BitboardSet::StartPos()
 {
+    JUPITER_TRACE();
+
     m_Bits[Color::WHITE][Piece::PAWN]   = 0b00000000'11111111'00000000'00000000'00000000'00000000'00000000'00000000;
     m_Bits[Color::WHITE][Piece::KNIGHT] = 0b01000010'00000000'00000000'00000000'00000000'00000000'00000000'00000000;
     m_Bits[Color::WHITE][Piece::BISHOP] = 0b00100100'00000000'00000000'00000000'00000000'00000000'00000000'00000000;
@@ -23,6 +25,8 @@ void BitboardSet::StartPos()
 
 void BitboardSet::Set(Color::Value color, Piece::Value piece, uint8_t index)
 {
+    JUPITER_TRACE();
+
     uint64_t bit = 1ul << index;
     m_Bits[color][piece] |= bit;
     m_Combined[color] |= bit;
@@ -30,6 +34,8 @@ void BitboardSet::Set(Color::Value color, Piece::Value piece, uint8_t index)
 
 void BitboardSet::Unset(Color::Value color, Piece::Value piece, uint8_t index)
 {
+    JUPITER_TRACE();
+
     uint64_t bit = 1ul << index;
     m_Bits[color][piece] &= ~bit;
     m_Combined[color] &= ~bit;
@@ -37,6 +43,8 @@ void BitboardSet::Unset(Color::Value color, Piece::Value piece, uint8_t index)
 
 void BitboardSet::UnsetAll(Color::Value color, uint8_t index)
 {
+    JUPITER_TRACE();
+
     uint64_t bit = 1ul << index;
     if (m_Combined[color] & bit) {
         m_Bits[color][Piece::PAWN] &= ~bit;
@@ -51,6 +59,8 @@ void BitboardSet::UnsetAll(Color::Value color, uint8_t index)
 
 void BitboardSet::Clear()
 {
+    JUPITER_TRACE();
+
     for (auto& board : m_Bits[Color::WHITE]) 
         board = 0ul;
 
@@ -60,29 +70,39 @@ void BitboardSet::Clear()
 
 bool BitboardSet::Has(Color::Value color, Piece::Value piece, uint8_t index) const
 {
+    JUPITER_TRACE();
+
     uint64_t bit = 1ul << index;
     return m_Bits[color][piece] & bit;
 }
 
 bool BitboardSet::Has(Color::Value color, uint8_t index) const
 {
+    JUPITER_TRACE();
+
     uint64_t bit = 1ul << index;
     return m_Combined[color] & bit;
 }
 
 bool BitboardSet::Has(uint8_t index) const
 {
+    JUPITER_TRACE();
+
     uint64_t bit = 1ul << index;
     return (m_Combined[Color::WHITE] | m_Combined[Color::BLACK]) & bit;
 }
 
 uint8_t BitboardSet::Count(Color::Value color, Piece::Value piece) const 
 {
+    JUPITER_TRACE();
+
     return std::popcount(m_Bits[color][piece]);
 }
 
 Piece::Value BitboardSet::PieceInSquare(Color::Value color, uint8_t index) const 
 {
+    JUPITER_TRACE();
+
     if (Has(index)) {
         uint64_t bit = 1ul << index;
         for (uint8_t piece = 0; piece < Piece::MAX_ENUM; piece++) {
@@ -95,6 +115,8 @@ Piece::Value BitboardSet::PieceInSquare(Color::Value color, uint8_t index) const
 
 std::pair<Color::Value, Piece::Value> BitboardSet::PieceInSquare(uint8_t index) const
 {
+    JUPITER_TRACE();
+
     if (Has(index)) {
         uint64_t bit = 1ul << index;
         for (uint8_t color = 0; color < Color::MAX_ENUM; color++) {
@@ -109,15 +131,21 @@ std::pair<Color::Value, Piece::Value> BitboardSet::PieceInSquare(uint8_t index) 
 
 Bitboard BitboardSet::OccupancyMask(Color::Value color, Piece::Value piece) const
 {
+    JUPITER_TRACE();
+
     return m_Bits[color][piece];
 }
 
 Bitboard BitboardSet::OccupancyMask(Color::Value color) const
 {
+    JUPITER_TRACE();
+
     return m_Combined[color];
 }
 
 Bitboard BitboardSet::OccupancyMask() const
 {
+    JUPITER_TRACE();
+
     return m_Combined[Color::WHITE] | m_Combined[Color::BLACK];
 }

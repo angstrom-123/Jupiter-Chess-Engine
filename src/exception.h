@@ -1,10 +1,10 @@
 #pragma once
 
+#include "stackTrace.h"
 #include <stdexcept>
 #include <string>
 #include <sstream>
 
-// TODO: Add stack trace (not dependent on glibc)
 class Exception : public std::runtime_error {
 public:
     explicit Exception(const std::string& message)
@@ -17,7 +17,8 @@ private:
     static std::string Format(const std::string& message)
     {
         std::stringstream ss;
-        ss << message << "\n\n==== C++ Stack Trace ====\n" << "TODO";
+        ss << message << std::endl;
+        StackTracer::PrintTrace();
         return ss.str();
     }
 };

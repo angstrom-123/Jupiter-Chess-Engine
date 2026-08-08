@@ -2,6 +2,8 @@
 
 PieceSquareTableManager::PieceSquareTableManager()
 {
+    JUPITER_TRACE();
+
     // Rofchade PST 
     // Taken from a chess forum post.
     // source: https://www.talkchess.com/forum3/viewtopic.php?f=2&t=68311&start=19
@@ -146,6 +148,8 @@ PieceSquareTableManager::PieceSquareTableManager()
 
 int64_t PieceSquareTableManager::Get(Color::Value color, Piece::Value piece, uint8_t index, uint8_t phase)
 {
+    JUPITER_TRACE();
+
     float endgameWeight = static_cast<float>(phase) / 100.0;
     float midgameWeight = 1.0 - endgameWeight;
 

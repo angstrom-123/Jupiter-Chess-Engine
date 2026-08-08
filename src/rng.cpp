@@ -1,9 +1,12 @@
 #include "rng.h"
+#include "stackTrace.h"
 
 #define ROTL(d,lrot) ((d<<(lrot)) | (d>>(8*sizeof(d)-(lrot))))
 
 RomuQuadRandom::RomuQuadRandom(uint64_t state[4]) 
 {
+    JUPITER_TRACE();
+
     m_StateW = state[0];
     m_StateX = state[1];
     m_StateY = state[2];
@@ -12,12 +15,16 @@ RomuQuadRandom::RomuQuadRandom(uint64_t state[4])
 
 void RomuQuadRandom::Warm(uint8_t iterations)
 {
+    JUPITER_TRACE();
+
     for (uint8_t i = 0; i < iterations; i++)
         Generate();
 }
 
 uint64_t RomuQuadRandom::Generate()
 {
+    JUPITER_TRACE();
+
    uint64_t wp = m_StateW, xp = m_StateX, yp = m_StateY, zp = m_StateZ;
    m_StateW = 15241094284759029579u * zp; // a-mult
    m_StateX = zp + ROTL(wp, 52);          // b-rotl, c-add

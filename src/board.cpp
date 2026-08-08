@@ -13,6 +13,8 @@ namespace libjupiter {
     Board::Board(const char *fen)
         : m_Zobrist{Zobrist()}, m_History{m_Zobrist}, m_Searcher{m_Zobrist}
     {
+        JUPITER_TRACE();
+
         if (fen == nullptr)
         {
             m_State.pieces.StartPos();
@@ -177,11 +179,14 @@ namespace libjupiter {
 
     void Board::SetTimeControl(uint64_t seconds, uint64_t increment)
     {
+        JUPITER_TRACE();
+
         m_Searcher.SetTimeControl(seconds, increment);
     }
 
     Move Board::Go(uint64_t moveMs)
     {
+        JUPITER_TRACE();
         // TODO: Draw by repetition, 50-move rule
 
         Move bestMove = m_Searcher.FindBest(m_State, m_History, moveMs);
@@ -193,6 +198,8 @@ namespace libjupiter {
 
     void Board::MakeMove(LongAlgebraicMove lan)
     {
+        JUPITER_TRACE();
+
         Move move = Move::FromLAN(lan, m_State.pieces);
         if (!Move::IsValid(move)) {
             m_InternalState = EngineState::ERROR_MALFORMED_LAN_STRING;
@@ -210,11 +217,15 @@ namespace libjupiter {
 
     bool Board::HasError()
     {
+        JUPITER_TRACE();
+
         return m_InternalState >= EngineState::ERROR;
     }
 
     const char *Board::GetError()
     {
+        JUPITER_TRACE();
+
         switch (m_InternalState) {
             case EngineState::ERROR_MALFORMED_FEN_STRING:
                 return "Malformed FEN string";
@@ -241,6 +252,8 @@ namespace libjupiter {
 
     void Board::Show(std::string& result)
     {
+        JUPITER_TRACE();
+
         std::ostringstream ss;
         ss << "Move " << m_FullMoves << std::endl
             << (m_State.turn == Color::BLACK ? "Black" : "White") << " to move" << std::endl
@@ -271,6 +284,8 @@ namespace libjupiter {
 
     void Board::Clear()
     {
+        JUPITER_TRACE();
+
         m_InternalState = EngineState::OK;
         m_State.pieces = BitboardSet{};
         m_State.rights = CastlingRights{};
@@ -282,6 +297,8 @@ namespace libjupiter {
 
     bool Board::SplitFEN(const char *fen, uint64_t length, FenView (&views)[13]) 
     {
+        JUPITER_TRACE();
+
         // Verify that the string is well formed
         uint64_t spaceCounter = 0;
         uint64_t slashCounter = 0;

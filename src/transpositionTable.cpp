@@ -4,28 +4,38 @@
 TranspositionTable::TranspositionTable(Zobrist& zobrist)
     : m_Zobrist{zobrist}
 {
+    JUPITER_TRACE();
+
     m_Table = new TableEntry[TRANSPOSITION_TABLE_SIZE];
     std::memset(m_Table, 0, TRANSPOSITION_TABLE_SIZE * sizeof(TableEntry));
 }
 
 TranspositionTable::~TranspositionTable()
 {
+    JUPITER_TRACE();
+
     delete[] m_Table;
 }
 
 std::size_t TranspositionTable::OccupiedMiB() const 
 {
+    JUPITER_TRACE();
+
     return static_cast<float>(m_Occupancy * sizeof(TableEntry)) / (1024.0 * 1024.0);
 }
 
 TableEntry TranspositionTable::Get(const BoardState& state) const
 {
+    JUPITER_TRACE();
+
     uint64_t key = m_Zobrist.ComputeKey(std::forward<const BoardState>(state));
     return Get(key);
 }
 
 TableEntry TranspositionTable::Get(ZobristKey key) const
 {
+    JUPITER_TRACE();
+
     uint64_t index = Index(key);
     TableEntry entry = m_Table[index];
     if (entry.hash == key)
@@ -35,6 +45,8 @@ TableEntry TranspositionTable::Get(ZobristKey key) const
 
 void TranspositionTable::Save(const BoardState& state, const TableEntryInfo&& info)
 {
+    JUPITER_TRACE();
+
     ZobristKey key = m_Zobrist.ComputeKey(std::forward<const BoardState>(state));
     uint64_t index = Index(key);
 
@@ -64,5 +76,7 @@ void TranspositionTable::Save(const BoardState& state, const TableEntryInfo&& in
 
 uint64_t TranspositionTable::Index(ZobristKey key) const 
 {
+    JUPITER_TRACE();
+
     return key & (TRANSPOSITION_TABLE_SIZE - 1);
 }

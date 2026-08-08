@@ -1,10 +1,11 @@
 #include "evaluator.h"
-#include "movegen.h"
 #include <bit>
 #include <cmath>
 
 int64_t Evaluator::Evaluate(const BoardState& state)
 {
+    JUPITER_TRACE();
+
     int64_t eval = 0;
 
     eval += MaterialBalance(std::forward<const BoardState>(state));
@@ -15,6 +16,8 @@ int64_t Evaluator::Evaluate(const BoardState& state)
 
 int64_t Evaluator::MaterialBalance(const BoardState& state)
 {
+    JUPITER_TRACE();
+
     int64_t materialEval = 0;
 
     Color::Value friendly = state.turn;
@@ -37,6 +40,8 @@ int64_t Evaluator::MaterialBalance(const BoardState& state)
 
 int64_t Evaluator::PiecePositions(const BoardState& state)
 {
+    JUPITER_TRACE();
+
     int64_t piecePositionEval = 0;
 
     Color::Value friendly = state.turn;
@@ -68,6 +73,8 @@ int64_t Evaluator::PiecePositions(const BoardState& state)
 // 0-100, higher = more likely to be endgame
 uint8_t Evaluator::GamePhase(const BoardState& state)
 {
+    JUPITER_TRACE();
+
     uint8_t score = 0;
 
     constexpr float MINOR_PIECE_WEIGHT = 35.0;

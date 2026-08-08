@@ -7,6 +7,8 @@
 
 Zobrist::Zobrist()
 {
+    JUPITER_TRACE();
+
     uint64_t seed[4] = { 1, 2, 3, 4 };
     RomuQuadRandom rng(seed);
     rng.Warm();
@@ -17,6 +19,8 @@ Zobrist::Zobrist()
 
 ZobristKey Zobrist::ComputeKey(const BoardState& state) const
 {
+    JUPITER_TRACE();
+
     ZobristKey key = 0;
     uint64_t offset = 0;
 

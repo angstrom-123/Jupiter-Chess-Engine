@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <cstdint>
 #include <ctime>
 #include <bit>
@@ -17,6 +18,8 @@ namespace chrono = std::chrono;
 
 Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRemaining)
 {
+    JUPITER_TRACE();
+
     auto startPoint = chrono::high_resolution_clock::now();
     uint64_t startMs = chrono::time_point_cast<chrono::milliseconds>(startPoint).time_since_epoch().count();
 
@@ -165,6 +168,8 @@ Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRe
 
 int64_t Searcher::Search(SearchInfo&& info)
 {
+    JUPITER_TRACE();
+
     // Only check termination condition every 2048 nodes to save expensive clock calls
     if ((m_NodesSearched & 2047) == 0) {
         auto nowPoint = chrono::high_resolution_clock::now();
@@ -292,6 +297,8 @@ int64_t Searcher::Search(SearchInfo&& info)
 
 int64_t Searcher::Quiesce(QuiesceInfo&& info)
 {
+    JUPITER_TRACE();
+
     // Only check termination condition every 2048 nodes to save expensive clock calls
     if ((m_NodesSearched & 2047) == 0) {
         auto nowPoint = chrono::high_resolution_clock::now();
@@ -398,12 +405,16 @@ int64_t Searcher::Quiesce(QuiesceInfo&& info)
 
 void Searcher::SetTimeControl(uint64_t seconds, uint64_t increment)
 {
+    JUPITER_TRACE();
+
     m_TimeControlSeconds = seconds;
     m_TimeControlIncrement = increment;
 }
 
 MoveData Searcher::MakeMove(Move move, BoardState& state)
 {
+    JUPITER_TRACE();
+
     Piece::Value capture = state.pieces.PieceInSquare(move.to).second;
 
     Color::Value friendly = state.turn;
@@ -481,6 +492,8 @@ MoveData Searcher::MakeMove(Move move, BoardState& state)
 
 void Searcher::UnmakeMove(MoveData moveData, BoardState& state)
 {
+    JUPITER_TRACE();
+
     const Move& move = moveData.move;
 
     Color::Value friendly = moveData.turn;
@@ -521,6 +534,8 @@ void Searcher::UnmakeMove(MoveData moveData, BoardState& state)
 
 bool Searcher::SquareUnderAttack(uint64_t bit, Color::Value color, const BoardState& state)
 {
+    JUPITER_TRACE();
+
     uint8_t index = std::countr_zero(bit);
     Color::Value enemy = Color::Opposite(color);
     Bitboard occupancy = state.pieces.OccupancyMask();
@@ -572,6 +587,8 @@ bool Searcher::SquareUnderAttack(uint64_t bit, Color::Value color, const BoardSt
 
 bool Searcher::WasLegal(MoveData moveData, const BoardState& state)
 {
+    JUPITER_TRACE();
+
     Bitboard king = state.pieces.OccupancyMask(moveData.turn, Piece::KING);
 
     bool targetAttacked = SquareUnderAttack(king, Color::Opposite(moveData.turn), std::forward<const BoardState>(state));
@@ -590,6 +607,8 @@ bool Searcher::WasLegal(MoveData moveData, const BoardState& state)
 
 void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMoveBuffer& attacks, CombinedMoveBuffer& ordered)
 {
+    JUPITER_TRACE();
+
     if (Move::IsValid(bestMove))
         ordered.PushBack(bestMove);
 
@@ -612,6 +631,8 @@ void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMo
 
 void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMoveBuffer& attacks, const QuietMoveBuffer& quiets, CombinedMoveBuffer& ordered)
 {
+    JUPITER_TRACE();
+
     if (Move::IsValid(bestMove))
         ordered.PushBack(bestMove);
 
@@ -641,6 +662,8 @@ void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMo
 
 int64_t Searcher::SEE(Move move, const BoardState& state)
 {
+    JUPITER_TRACE();
+
     BitboardSet pieces(state.pieces);
     Color::Value enemy = Color::Opposite(state.turn);
 

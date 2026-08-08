@@ -21,7 +21,6 @@ set(SOURCES
     src/searcher.cpp
     src/evaluator.cpp
     src/attackTable.cpp
-    src/boardState.cpp
     src/movegen.cpp
     src/pieceSquareTable.cpp
     src/zobrist.cpp

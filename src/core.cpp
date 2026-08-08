@@ -2,6 +2,7 @@
 
 uint8_t ToIndex(uint8_t x, uint8_t y)
 {
+    JUPITER_TRACE();
     return x + 8 * y;
 }
 

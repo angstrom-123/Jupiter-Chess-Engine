@@ -4,6 +4,8 @@
 
 LongAlgebraicMove LongAlgebraicMove::FromChars(char *chars)
 {
+    JUPITER_TRACE();
+
     uint64_t len = std::strlen(chars);
     if (len < 4 || len > 5)
         return LongAlgebraicMove::Invalid();
@@ -31,6 +33,8 @@ LongAlgebraicMove LongAlgebraicMove::FromChars(char *chars)
 
 LongAlgebraicMove Move::ToLAN() const
 {
+    JUPITER_TRACE();
+
     auto ToAlgebraic = [](uint8_t index, char *result) {
         uint8_t x = index % 8;
         uint8_t y = index / 8;
@@ -67,6 +71,8 @@ LongAlgebraicMove Move::ToLAN() const
 
 Move Move::FromLAN(LongAlgebraicMove lan, const BitboardSet& piecePositions)
 {
+    JUPITER_TRACE();
+
     Move move;
     auto ToIndex = [](const char *algebraic) {
         uint8_t x = algebraic[0] - 'a';

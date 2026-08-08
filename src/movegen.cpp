@@ -4,6 +4,8 @@
 namespace movegen {
     void FindAttacks(const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
     {
+        JUPITER_TRACE();
+
         attackBuffer.Clear();
 
         // Pawns
@@ -69,6 +71,8 @@ namespace movegen {
 
     void FindQuiets(const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
     {
+        JUPITER_TRACE();
+
         quietBuffer.Clear();
 
         // Pawns
@@ -134,6 +138,8 @@ namespace movegen {
 
     void FindPawnAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
     {
+        JUPITER_TRACE();
+
         const uint64_t backRankMask = 0xFF000000000000FF; // Same for both colors because pawns can't go back
 
         uint64_t enPassantBit = (state.enPassantIndex != UINT8_MAX) ? 1ul << state.enPassantIndex : 0;
@@ -159,6 +165,8 @@ namespace movegen {
 
     void FindPawnQuiets(uint8_t index, const BoardState& state, QuietMoveBuffer& quietBuffer)
     {
+        JUPITER_TRACE();
+
         const uint64_t backRankMask = 0xFF000000000000FF; // Same for both colors because pawns can't go back
         const uint64_t homeSquareMask = (state.turn == Color::WHITE) ? 0xFF000000000000 : 0x000000000000FF00;
 
@@ -185,6 +193,8 @@ namespace movegen {
 
     void FindKnightAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
     {
+        JUPITER_TRACE();
+
         Bitboard attacks = table.GetAttacks(index, Piece::KNIGHT, state.turn, 0);
         attacks &= ~state.pieces.OccupancyMask(state.turn);
         attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
@@ -198,6 +208,8 @@ namespace movegen {
 
     void FindKnightQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
     {
+        JUPITER_TRACE();
+
         Bitboard attacks = table.GetAttacks(index, Piece::KNIGHT, state.turn, 0);
         attacks &= ~state.pieces.OccupancyMask();
 
@@ -210,6 +222,8 @@ namespace movegen {
 
     void FindKingAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
     {
+        JUPITER_TRACE();
+
         Bitboard attacks = table.GetAttacks(index, Piece::KING, state.turn, 0);
         attacks &= ~state.pieces.OccupancyMask(state.turn);
         attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
@@ -223,6 +237,8 @@ namespace movegen {
 
     void FindKingQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
     {
+        JUPITER_TRACE();
+
         // Attacks
         {
             Bitboard attacks = table.GetAttacks(index, Piece::KING, state.turn, 0);
@@ -247,36 +263,50 @@ namespace movegen {
 
     void FindBishopAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
     {
+        JUPITER_TRACE();
+
         FindSliderAttacks(index, Piece::BISHOP, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
     }
 
     void FindBishopQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
     {
+        JUPITER_TRACE();
+
         FindSliderQuiets(index, Piece::BISHOP, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
     }
 
     void FindRookAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
     {
+        JUPITER_TRACE();
+
         FindSliderAttacks(index, Piece::ROOK, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
     }
 
     void FindRookQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
     {
+        JUPITER_TRACE();
+
         FindSliderQuiets(index, Piece::ROOK, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
     }
 
     void FindQueenAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
     {
+        JUPITER_TRACE();
+
         FindSliderAttacks(index, Piece::QUEEN, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
     }
 
     void FindQueenQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
     {
+        JUPITER_TRACE();
+
         FindSliderQuiets(index, Piece::QUEEN, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
     }
 
     void FindSliderAttacks(uint8_t index, Piece::Value piece, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
     {
+        JUPITER_TRACE();
+
         Bitboard attacks = table.GetAttacks(index, piece, state.turn, state.pieces.OccupancyMask());
         attacks &= ~state.pieces.OccupancyMask(state.turn);
         attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
@@ -290,6 +320,8 @@ namespace movegen {
 
     void FindSliderQuiets(uint8_t index, Piece::Value piece, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
     {
+        JUPITER_TRACE();
+
         Bitboard attacks = table.GetAttacks(index, piece, state.turn, state.pieces.OccupancyMask());
         attacks &= ~state.pieces.OccupancyMask();
 

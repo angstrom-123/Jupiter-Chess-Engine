@@ -18,6 +18,8 @@ const fs::path MAGIC_FILE_PATH = fs::path(__FILE__).parent_path().parent_path() 
 
 AttackTable::AttackTable()
 {
+    JUPITER_TRACE();
+
     GeneratePawnTables();
     GenerateKnightTables();
     GenerateKingTables();
@@ -26,6 +28,8 @@ AttackTable::AttackTable()
 
 Bitboard AttackTable::GetAttacks(uint8_t index, Piece::Value piece, Color::Value color, Bitboard occupancy) const
 {
+    JUPITER_TRACE();
+
     switch (piece) {
         case Piece::PAWN:
             return m_PawnTables[color][index];
@@ -64,6 +68,8 @@ Bitboard AttackTable::GetAttacks(uint8_t index, Piece::Value piece, Color::Value
 
 void AttackTable::SerializeMagics(const fs::path& path)
 {
+    JUPITER_TRACE();
+
     std::ofstream file(path, std::ios::out | std::ios::binary);
     std::ostreambuf_iterator<char> it(file);
     std::copy(reinterpret_cast<const char *>(m_RookData.magics.Data()), reinterpret_cast<const char *>(m_RookData.magics.Data() + 64), it);
@@ -72,6 +78,8 @@ void AttackTable::SerializeMagics(const fs::path& path)
 
 void AttackTable::DeserializeMagics(const fs::path& path)
 {
+    JUPITER_TRACE();
+
     std::ifstream file(path, std::ios::in | std::ios::binary);
     file.read(reinterpret_cast<char *>(m_RookData.magics.Data()), 64 * sizeof(uint64_t));
     file.read(reinterpret_cast<char *>(m_BishopData.magics.Data()), 64 * sizeof(uint64_t));
@@ -79,6 +87,8 @@ void AttackTable::DeserializeMagics(const fs::path& path)
 
 void AttackTable::GeneratePawnTables()
 {
+    JUPITER_TRACE();
+
     for (uint8_t i = 0; i < 64; i++) {
         Bitboard mask = 0;
         int8_t x = i % 8;
@@ -108,6 +118,8 @@ void AttackTable::GeneratePawnTables()
 
 void AttackTable::GenerateKnightTables()
 {
+    JUPITER_TRACE();
+
     for (uint8_t i = 0; i < 64; i++) {
         Bitboard mask = 0;
         int8_t x = i % 8;
@@ -124,6 +136,8 @@ void AttackTable::GenerateKnightTables()
 
 void AttackTable::GenerateKingTables()
 {
+    JUPITER_TRACE();
+
     for (uint8_t i = 0; i < 64; i++) {
         Bitboard mask = 0;
         int8_t x = i % 8;
@@ -140,6 +154,8 @@ void AttackTable::GenerateKingTables()
 
 void AttackTable::GenerateSliderTables()
 {
+    JUPITER_TRACE();
+
     if (fs::exists(MAGIC_FILE_PATH)) {
         DeserializeMagics(MAGIC_FILE_PATH);
         m_MagicsLoadedFromFile = true;
@@ -190,6 +206,8 @@ void AttackTable::GenerateSliderTables()
 
 Bitboard AttackTable::GenerateSliderMask(uint8_t index, const std::array<int8_t[2], 4>& deltas)
 {
+    JUPITER_TRACE();
+
     Bitboard mask = 0;
     int8_t x = index % 8;
     int8_t y = index / 8;
@@ -216,6 +234,8 @@ Bitboard AttackTable::GenerateSliderMask(uint8_t index, const std::array<int8_t[
 
 Bitboard AttackTable::GenerateSliderAttacks(uint8_t index, Bitboard occupancy, const std::array<int8_t[2], 4>& deltas)
 {
+    JUPITER_TRACE();
+
     Bitboard mask = 0;
     int8_t x = index % 8;
     int8_t y = index / 8;
@@ -238,6 +258,8 @@ Bitboard AttackTable::GenerateSliderAttacks(uint8_t index, Bitboard occupancy, c
 
 Bitboard AttackTable::FindMagic(uint8_t index, XorShift64& rng, Piece::Value piece, uint64_t maxAttempts)
 {
+    JUPITER_TRACE();
+
     const SliderData& data = (piece == Piece::ROOK) ? m_RookData : m_BishopData;
 
     auto SparseRandom = [&rng]() {
