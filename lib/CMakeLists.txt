@@ -7,9 +7,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Don't use set because apparently apple doesn't like it
-string(APPEND CMAKE_CXX_FLAGS "-Wall -Wextra")
-string(APPEND CMAKE_CXX_FLAGS_DEBUG "-g")
-string(APPEND CMAKE_CXX_FLAGS_RELEASE "-O3")
+string(APPEND CMAKE_CXX_FLAGS " -Wall -Wextra")
+string(APPEND CMAKE_CXX_FLAGS_DEBUG " -g")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " -O3")
 
 find_package(Python3 COMPONENTS Development REQUIRED)
 

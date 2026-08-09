@@ -3,8 +3,9 @@
 A chess engine written in c++ as a python library.
 Written to integrate directly with [Jupiter Client](https://github.com/angstrom-123/Jupiter-Chess-Interface)
 
-- `example.py` shows usage of the library.
-- `jupiter.py` integrates with [Jupiter Client](https://github.com/angstrom-123/Jupiter-Chess-Interface) directly (hence the missing import `framework.base_engine` and the import of `.build` instead of `build`)
+- `example.py` shows usage of the library
+- `jupiter.py` integrates with [Jupiter Client](https://github.com/angstrom-123/Jupiter-Chess-Interface)
+- `lib` contains the source c++ library code
 
 ## Prerequisites
 
@@ -13,11 +14,25 @@ Written to integrate directly with [Jupiter Client](https://github.com/angstrom-
 - CMake 
 - make (or windows equivalent for use with CMake)
 
-## Build Library
+## Build and Run
+
+### Build the Library
+
+Compile the library code into a dll:
 
 ```bash
+cd lib
 mkdir build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make
+cd ../..
+```
+
+### Test the Engine
+
+Run the example file:
+
+```bash 
+python3 example.py
 ```

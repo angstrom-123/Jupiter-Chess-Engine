@@ -37,7 +37,7 @@ namespace py {
         Py_TYPE(self)->tp_free(reinterpret_cast<PyObject *>(self));
     }
 
-    static PyObject *BoardNew(PyTypeObject *type, PyObject *args, PyObject *kwards)
+    static PyObject *BoardNew(PyTypeObject *type, PyObject *, PyObject *)
     {
         JUPITER_TRACE();
 
@@ -47,7 +47,7 @@ namespace py {
         return reinterpret_cast<PyObject *>(self);
     }
 
-    static int BoardInit(Board *self, PyObject *args, PyObject *kwargs)
+    static int BoardInit(Board *self, PyObject *args, PyObject *)
     {
         JUPITER_TRACE();
 
@@ -71,7 +71,7 @@ namespace py {
         return PyUnicode_FromString(result.c_str());
     }
 
-    static PyObject *BoardHasError(Board *self, PyObject *args)
+    static PyObject *BoardHasError(Board *self, PyObject *)
     {
         JUPITER_TRACE();
 
@@ -80,7 +80,7 @@ namespace py {
         return PyBool_FromLong(self->board->HasError());
     }
 
-    static PyObject *BoardGetError(Board *self, PyObject *args)
+    static PyObject *BoardGetError(Board *self, PyObject *)
     {
         JUPITER_TRACE();
 
@@ -150,7 +150,7 @@ namespace py {
 
     // Board Type Definition
 
-    static PyTypeObject boardType = {
+    static PyTypeObject boardType{
         .ob_base = PyVarObject_HEAD_INIT(nullptr, 0)
         .tp_name = "libjupiter.Board",
         .tp_basicsize = sizeof(libjupiter::Board),
@@ -161,7 +161,7 @@ namespace py {
         .tp_doc = "Chess board class",
         .tp_methods = boardMethods,
         .tp_init = reinterpret_cast<initproc>(BoardInit),
-        .tp_new = BoardNew,
+        .tp_new = BoardNew
     };
 }
 

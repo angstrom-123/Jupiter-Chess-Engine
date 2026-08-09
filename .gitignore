@@ -3,3 +3,4 @@ build/
 compile_commands.json
 magics.bin
 __pycache__/
+jja-0.8.0-glibc.bin

@@ -187,7 +187,7 @@ namespace libjupiter {
     Move Board::Go(uint64_t moveMs)
     {
         JUPITER_TRACE();
-        // TODO: Draw by repetition, 50-move rule
+        // TODO: 50-move rule
 
         Move bestMove = m_Searcher.FindBest(m_State, m_History, moveMs);
         if (!Move::IsValid(bestMove))
