@@ -4,7 +4,7 @@ from typing import override
 
 from framework.base_engine import BaseEngine, TimeControl
 
-from .build.libjupiter import Board
+from .lib.build.libjupiter import Board
 
 class Jupiter(BaseEngine):
     board: Board | None = None 

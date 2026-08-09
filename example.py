@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from build.libjupiter import Board
+from lib.build.libjupiter import Board
 
 # ========== Create a board ==========
 
