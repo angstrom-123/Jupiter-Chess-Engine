@@ -18,6 +18,7 @@ set(SOURCES
     src/board.cpp 
     src/move.cpp
     src/core.cpp 
+    src/openingBook.cpp
     src/searcher.cpp
     src/evaluator.cpp
     src/attackTable.cpp

@@ -1,5 +1,6 @@
 #include "move.h"
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 
 LongAlgebraicMove LongAlgebraicMove::FromChars(char *chars)
@@ -43,6 +44,9 @@ LongAlgebraicMove Move::ToLAN() const
     };
 
     LongAlgebraicMove lan =  { .chars = { '\0', '\0', '\0', '\0', '\0' } };
+
+    if (!IsValid())
+        return LongAlgebraicMove::Invalid();
 
     ToAlgebraic(from, lan.from);
     ToAlgebraic(to, lan.to);

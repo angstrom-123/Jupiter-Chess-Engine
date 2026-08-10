@@ -33,3 +33,28 @@ uint64_t RomuQuadRandom::Generate()
    m_StateZ = ROTL(m_StateZ, 19);         // f-rotl
    return xp;
 }
+
+RomuMonoRandom::RomuMonoRandom(uint32_t seed)
+{
+    JUPITER_TRACE();
+
+    m_State = (seed & 0x1fffffffu) + 1156979152u;  // Accepts 29 seed-bits.
+}
+
+void RomuMonoRandom::Warm(uint8_t iterations)
+{
+    JUPITER_TRACE();
+
+    for (uint8_t i = 0; i < iterations; i++)
+        Generate();
+}
+
+uint16_t RomuMonoRandom::Generate()
+{
+    JUPITER_TRACE();
+
+    uint16_t result = m_State >> 16;
+    m_State *= 3611795771u;  
+    m_State = ROTL(m_State, 12);
+    return result;
+}

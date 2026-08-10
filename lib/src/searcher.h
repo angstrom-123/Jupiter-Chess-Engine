@@ -8,6 +8,8 @@
 #include "move.h"
 #include "attackTable.h"
 #include "movegen.h"
+#include "openingBook.h"
+#include "rng.h"
 #include "transpositionTable.h"
 
 using LineBuffer = Buffer<Move, 32>;
@@ -67,22 +69,22 @@ struct QuiesceInfo {
 
 class Searcher {
 public:
-    Searcher(Zobrist& zobrist)
-        : m_TranspositionTable(zobrist) {}
+    Searcher(Zobrist& zobrist, OpeningBook& openingBook);
     Move FindBest(const BoardState& state, History& history, uint64_t msRemaining);
-    MoveData MakeMove(Move move, BoardState &state);
+    MoveData MakeMove(BoardState &state, Move move);
     void SetTimeControl(uint64_t seconds, uint64_t increment);
 
 private:
-    void UnmakeMove(MoveData moveData, BoardState& state);
+    Move PickOpeningMove(const BoardState& state);
+    void UnmakeMove(BoardState& state, MoveData moveData);
     int64_t Search(SearchInfo&& info);
     int64_t Quiesce(QuiesceInfo&& info);
-    bool SquareUnderAttackBy(uint64_t bit, Color::Value color, Piece::Value piece, const BoardState& state);
-    bool SquareUnderAttack(uint64_t bit, Color::Value color, const BoardState& state);
-    bool WasLegal(MoveData moveData, const BoardState& state);
+    bool SquareUnderAttackBy(const BoardState& state, uint64_t bit, Color::Value color, Piece::Value piece);
+    bool SquareUnderAttack(const BoardState& state, uint64_t bit, Color::Value color);
+    bool WasLegal(const BoardState& state, MoveData moveData);
     void OrderMoves(const BoardState& state, Move bestMove, const AttackMoveBuffer& attacks, const QuietMoveBuffer& quiets, CombinedMoveBuffer& ordered);
     void OrderMoves(const BoardState& state, Move bestMove, const AttackMoveBuffer& attacks, CombinedMoveBuffer& ordered);
-    int64_t SEE(Move move, const BoardState& state);
+    int64_t SEE(const BoardState& state, Move move);
 
 private:
     uint64_t m_TimeControlSeconds{0};
@@ -92,7 +94,10 @@ private:
     uint64_t m_NodesQuiesced{0};
     uint64_t m_TranspositionHits{0};
     bool m_SearchAborted{false};
+    bool m_InOpeningBook{true};
+    RomuMonoRandom m_FastRNG{RomuMonoRandom(time(nullptr))};
     AttackTable m_AttackTable{AttackTable()};
     Evaluator m_Eval{Evaluator()};
     TranspositionTable m_TranspositionTable;
+    OpeningBook m_OpeningBook;
 };

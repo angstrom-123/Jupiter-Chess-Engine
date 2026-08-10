@@ -31,7 +31,6 @@
 // More robust than anyone could need, but uses more registers than RomuTrio.
 // Est. capacity >= 2^90 bytes. Register pressure = 8 (high). State size = 256 bits.
 
-// FORGIVING WITH SEED, SHOULD BE FINE TO SEED WITH ANY NUMBERS, ESPECIALLY IF WARMED BEFORE USE.
 class RomuQuadRandom {
 public:
     RomuQuadRandom(uint64_t seed[4]);
@@ -43,4 +42,21 @@ private:
     uint64_t m_StateX;
     uint64_t m_StateY;
     uint64_t m_StateZ;
+};
+
+
+//===== RomuMono32 ===============================================================================
+//
+// 32-bit arithmetic: Suitable only up to 2^26 output-values. Outputs 16-bit numbers.
+// Fixed period of (2^32)-47. Must be seeded using the romuMono32_init function.
+// Capacity = 2^27 bytes. Register pressure = 2. State size = 32 bits.
+
+class RomuMonoRandom {
+public:
+    RomuMonoRandom(uint32_t seed);
+    void Warm(uint8_t iterations = 10);
+    uint16_t Generate();
+
+private:
+    uint32_t m_State;
 };

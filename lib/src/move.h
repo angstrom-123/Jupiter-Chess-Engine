@@ -11,8 +11,8 @@ union LongAlgebraicMove {
     };
     char chars[5];
 
+    bool IsValid() const { return chars[0] != '\0'; }
     static LongAlgebraicMove Invalid() { return LongAlgebraicMove { .chars = { '\0', '\0', '\0', '\0', '\0' } }; }
-    static bool IsValid(LongAlgebraicMove move) { return move.chars[0] != '\0'; }
     static LongAlgebraicMove FromChars(char *chars);
 };
 
@@ -25,7 +25,7 @@ struct Move {
     LongAlgebraicMove ToLAN() const;
     bool operator==(const Move& other) const = default;
 
-    static bool IsValid(Move move) { return Piece::IsValid(move.piece); }
+    bool IsValid() const { return Piece::IsValid(piece); }
     static Move Invalid() { return Move(); }
     static Move FromLAN(LongAlgebraicMove lan, const BitboardSet& piecePositions);
 };

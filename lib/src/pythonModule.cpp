@@ -116,7 +116,7 @@ namespace py {
             return nullptr;
 
         LongAlgebraicMove move = LongAlgebraicMove::FromChars(lan);
-        if (!LongAlgebraicMove::IsValid(move))
+        if (!move.IsValid())
             return nullptr;
         self->board->MakeMove(move);
         Py_RETURN_NONE;

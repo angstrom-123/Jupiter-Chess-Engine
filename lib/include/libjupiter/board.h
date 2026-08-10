@@ -6,6 +6,7 @@
 #include "boardState.h"
 #include "core.h"
 #include "move.h"
+#include "openingBook.h"
 #include "searcher.h"
 #include "history.h"
 
@@ -27,6 +28,7 @@ namespace libjupiter {
     private:
         EngineState::Value m_InternalState{EngineState::OK};
         Zobrist m_Zobrist;
+        OpeningBook m_OpeningBook;
         History m_History;
         Searcher m_Searcher;
         BoardState m_State;

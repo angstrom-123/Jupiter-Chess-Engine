@@ -7,11 +7,12 @@
 #include "libjupiter/board.h"
 #include "core.h"
 #include "move.h"
+#include "openingBook.h"
 #include "zobrist.h"
 
 namespace libjupiter {
     Board::Board(const char *fen)
-        : m_Zobrist{Zobrist()}, m_History{m_Zobrist}, m_Searcher{m_Zobrist}
+        : m_Zobrist(), m_OpeningBook(), m_History(m_Zobrist), m_Searcher(m_Zobrist, m_OpeningBook)
     {
         JUPITER_TRACE();
 
@@ -146,7 +147,8 @@ namespace libjupiter {
                     m_InternalState = EngineState::ERROR_BAD_FEN_EN_PASSANT_SQUARE;
                     return;
                 }
-                m_State.enPassantIndex = first - 'a' + 8 * (8 - (second - '1'));
+                m_State.enPassantIndex = first - 'a' + 8 * (7 - (second - '1'));
+                std::cout << "Square: " << first << second << " became index " << static_cast<int64_t>(m_State.enPassantIndex) << std::endl;
             } else {
                 m_InternalState = EngineState::ERROR_BAD_FEN_EN_PASSANT_SQUARE;
                 return;
@@ -175,6 +177,15 @@ namespace libjupiter {
 
         // Save initial board state to history
         m_History.Push(m_State);
+
+        // TODO: Remove
+        OpeningMoves buffer;
+        if (m_OpeningBook.LookupMoves(m_State, buffer)) {
+            for (const auto [move, weight] : buffer) {
+                std::cout.write(move.ToLAN().chars, (Piece::IsValid(move.promote) ? 5 : 4));
+                std::cout << ": " << weight << std::endl;
+            }
+        }
     }
 
     void Board::SetTimeControl(uint64_t seconds, uint64_t increment)
@@ -190,7 +201,7 @@ namespace libjupiter {
         // TODO: 50-move rule
 
         Move bestMove = m_Searcher.FindBest(m_State, m_History, moveMs);
-        if (!Move::IsValid(bestMove))
+        if (!bestMove.IsValid())
             m_InternalState = EngineState::ERROR_COULDNT_FIND_MOVE;
 
         return bestMove;
@@ -201,12 +212,12 @@ namespace libjupiter {
         JUPITER_TRACE();
 
         Move move = Move::FromLAN(lan, m_State.pieces);
-        if (!Move::IsValid(move)) {
+        if (!move.IsValid()) {
             m_InternalState = EngineState::ERROR_MALFORMED_LAN_STRING;
             return;
         }
 
-        m_Searcher.MakeMove(move, m_State);
+        m_Searcher.MakeMove(m_State, move);
         m_History.Push(m_State);
 
         if (m_State.turn == Color::WHITE)
@@ -313,14 +324,16 @@ namespace libjupiter {
                     break;
                 case 'p': case 'P':
                 case 'n': case 'N':
-                case 'b': case 'B':
+                case 'B': // case 'b' handled in the 'a'-'h' check
                 case 'r': case 'R':
                 case 'q': case 'Q':
                 case 'k': case 'K':
                 case 'w': case '-':
+                case 'a'...'h':
                 case '0'...'9':
                     break;
                 default:
+                    std::cout << "invalid character: " << c << std::endl;
                     return false;
             }
         }

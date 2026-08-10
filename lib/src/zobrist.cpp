@@ -63,7 +63,7 @@ ZobristKey Zobrist::ComputeKey(const BoardState& state) const
         // the same value as long as there is no pawn to capture en passant.
         // This check only accounts for pseudo-legal en passant captures but is better than nothing.
         uint8_t file = state.enPassantIndex & 7;
-        uint8_t square = 8 * (state.turn == Color::WHITE ? 4 : 3) + file;
+        uint8_t square = 8 * (state.turn == Color::WHITE ? 3 : 4) + file;
         uint64_t adjacentMask = 0;
         if (file > 0) adjacentMask |= (1ul << (square - 1));
         if (file < 7) adjacentMask |= (1ul << (square + 1));

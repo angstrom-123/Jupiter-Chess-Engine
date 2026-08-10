@@ -16,12 +16,35 @@
 
 namespace chrono = std::chrono;
 
+Searcher::Searcher(Zobrist& zobrist, OpeningBook& openingBook)
+    : m_TranspositionTable(zobrist), m_OpeningBook{openingBook} 
+{
+    m_FastRNG.Warm();
+}
+
 Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRemaining)
 {
     JUPITER_TRACE();
 
     auto startPoint = chrono::high_resolution_clock::now();
     uint64_t startMs = chrono::time_point_cast<chrono::milliseconds>(startPoint).time_since_epoch().count();
+
+    // Consult opening book if still valid
+    if (m_InOpeningBook) {
+        Move move = PickOpeningMove(std::forward<const BoardState>(state));
+        if (move.IsValid()) {
+            auto endPoint = chrono::high_resolution_clock::now();
+            uint64_t endMs = chrono::time_point_cast<chrono::milliseconds>(endPoint).time_since_epoch().count();
+
+            uint64_t msTaken = endMs - startMs;
+            std::cout << "Looked up opening move in " << msTaken << "ms" <<  std::endl;
+
+            return move;
+        }
+
+        // Could not find position in opening book so do a full search for all subsequent moves
+        m_InOpeningBook = false;
+    }
 
     float m = std::max(10l, 50 - static_cast<int64_t>(state.halfMoves) / 2);
     float i = std::max(0l, static_cast<int64_t>(m_TimeControlIncrement) - 2) * 1000.0;
@@ -70,9 +93,9 @@ Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRe
 
         for (Move move : moves) {
             m_NodesSearched++;
-            MoveData moveData = MakeMove(move, workingState);
-            if (!WasLegal(moveData, workingState)) {
-                UnmakeMove(moveData, workingState);
+            MoveData moveData = MakeMove(workingState, move);
+            if (!WasLegal(workingState, moveData)) {
+                UnmakeMove(workingState, moveData);
                 continue;
             }
             m_NodesEvaluated++;
@@ -94,7 +117,7 @@ Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRe
                     .targetMs = targetMs
                 });
             }
-            UnmakeMove(moveData, workingState);
+            UnmakeMove(workingState, moveData);
             history.Pop();
 
             // Ran out of time
@@ -116,7 +139,7 @@ Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRe
         }
 
         // Checkmate or stalemate
-        if (!Move::IsValid(depthBestMove)) {
+        if (!depthBestMove.IsValid()) {
             std::cout << "Couldn't find a valid move" << std::endl;
             break;
         }
@@ -129,18 +152,18 @@ Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRe
         principalVariation.PushBack(bestMove);
 
         BoardState reconstructState(workingState);
-        MakeMove(bestMove, reconstructState);
+        MakeMove(reconstructState, bestMove);
         for (uint8_t i = 1; i < depth; i++) { // Already saved the first move
             TableEntry entry = m_TranspositionTable.Get(std::forward<const BoardState>(reconstructState));
             if (!entry.IsValid())
                 break;
 
-            if (!Move::IsValid(entry.bestMove))
+            if (!entry.bestMove.IsValid())
                 break;
 
-            MoveData moveData = MakeMove(entry.bestMove, reconstructState);
-            if (!WasLegal(moveData, std::forward<const BoardState>(reconstructState))) {
-                UnmakeMove(moveData, reconstructState);
+            MoveData moveData = MakeMove(reconstructState, entry.bestMove);
+            if (!WasLegal(std::forward<const BoardState>(reconstructState), moveData)) {
+                UnmakeMove(reconstructState, moveData);
                 break;
             }
 
@@ -234,9 +257,9 @@ int64_t Searcher::Search(SearchInfo&& info)
 
     for (Move move : moves) {
         m_NodesSearched++;
-        MoveData moveData = MakeMove(move, info.state);
-        if (!WasLegal(moveData, info.state)) {
-            UnmakeMove(moveData, info.state);
+        MoveData moveData = MakeMove(info.state, move);
+        if (!WasLegal(info.state, moveData)) {
+            UnmakeMove(info.state, moveData);
             continue;
         }
         m_NodesEvaluated++;
@@ -249,7 +272,7 @@ int64_t Searcher::Search(SearchInfo&& info)
             score = 0; // TODO: Contempt?
         else
             score = -Search(SearchInfo::Next(info));
-        UnmakeMove(moveData, info.state);
+        UnmakeMove(info.state, moveData);
         info.history.Pop();
 
         if (m_SearchAborted) 
@@ -276,9 +299,9 @@ int64_t Searcher::Search(SearchInfo&& info)
         }
     }
 
-    if (!Move::IsValid(bestMove)) {
+    if (!bestMove.IsValid()) {
         Bitboard king = info.state.pieces.OccupancyMask(info.state.turn, Piece::KING);
-        if (SquareUnderAttack(king, Color::Opposite(info.state.turn), info.state)) 
+        if (SquareUnderAttack(info.state, king, Color::Opposite(info.state.turn))) 
             max = -MATE_EVAL + info.ply; // Checkmate
         else 
             max = 0; // Stalemate
@@ -372,9 +395,9 @@ int64_t Searcher::Quiesce(QuiesceInfo&& info)
         m_NodesSearched++;
         m_NodesQuiesced++;
 
-        MoveData moveData = MakeMove(move, info.state);
-        if (!WasLegal(moveData, info.state)) {
-            UnmakeMove(moveData, info.state);
+        MoveData moveData = MakeMove(info.state, move);
+        if (!WasLegal(info.state, moveData)) {
+            UnmakeMove(info.state, moveData);
             continue;
         }
         m_NodesEvaluated++;
@@ -387,7 +410,7 @@ int64_t Searcher::Quiesce(QuiesceInfo&& info)
             score = 0; // TODO: Contempt?
         else
             score = -Quiesce(QuiesceInfo::Next(info));
-        UnmakeMove(moveData, info.state);
+        UnmakeMove(info.state, moveData);
         info.history.Pop();
 
         if (score >= info.beta)
@@ -411,7 +434,7 @@ void Searcher::SetTimeControl(uint64_t seconds, uint64_t increment)
     m_TimeControlIncrement = increment;
 }
 
-MoveData Searcher::MakeMove(Move move, BoardState& state)
+MoveData Searcher::MakeMove(BoardState& state, Move move)
 {
     JUPITER_TRACE();
 
@@ -490,7 +513,16 @@ MoveData Searcher::MakeMove(Move move, BoardState& state)
     return moveData;
 }
 
-void Searcher::UnmakeMove(MoveData moveData, BoardState& state)
+Move Searcher::PickOpeningMove(const BoardState& state)
+{
+    OpeningMoves moves;
+    if (!m_OpeningBook.LookupMoves(std::forward<const BoardState>(state), moves))
+        return Move::Invalid();
+
+    return moves[m_FastRNG.Generate() % moves.Size()].first;
+}
+
+void Searcher::UnmakeMove(BoardState& state, MoveData moveData)
 {
     JUPITER_TRACE();
 
@@ -532,7 +564,7 @@ void Searcher::UnmakeMove(MoveData moveData, BoardState& state)
     state.halfMoves = moveData.halfMoves;
 }
 
-bool Searcher::SquareUnderAttack(uint64_t bit, Color::Value color, const BoardState& state)
+bool Searcher::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::Value color)
 {
     JUPITER_TRACE();
 
@@ -585,19 +617,19 @@ bool Searcher::SquareUnderAttack(uint64_t bit, Color::Value color, const BoardSt
     return false;
 }
 
-bool Searcher::WasLegal(MoveData moveData, const BoardState& state)
+bool Searcher::WasLegal(const BoardState& state, MoveData moveData)
 {
     JUPITER_TRACE();
 
     Bitboard king = state.pieces.OccupancyMask(moveData.turn, Piece::KING);
 
-    bool targetAttacked = SquareUnderAttack(king, Color::Opposite(moveData.turn), std::forward<const BoardState>(state));
+    bool targetAttacked = SquareUnderAttack(std::forward<const BoardState>(state), king, Color::Opposite(moveData.turn));
 
     // Check intermediate and start squares if castling
     if (moveData.move.piece == Piece::KING && Difference(moveData.move.from, moveData.move.to) == 2) {
-        bool startAttacked = SquareUnderAttack(1ul << moveData.move.from, Color::Opposite(moveData.turn), std::forward<const BoardState>(state));
+        bool startAttacked = SquareUnderAttack(std::forward<const BoardState>(state), 1ul << moveData.move.from, Color::Opposite(moveData.turn));
         uint8_t midIndex = (moveData.move.from > moveData.move.to) ? moveData.move.from - 1 : moveData.move.from + 1;
-        bool midAttacked = SquareUnderAttack(1ul << midIndex, Color::Opposite(moveData.turn), std::forward<const BoardState>(state));
+        bool midAttacked = SquareUnderAttack(std::forward<const BoardState>(state), 1ul << midIndex, Color::Opposite(moveData.turn));
 
         return !(targetAttacked || startAttacked || midAttacked);
     }
@@ -609,7 +641,7 @@ void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMo
 {
     JUPITER_TRACE();
 
-    if (Move::IsValid(bestMove))
+    if (bestMove.IsValid())
         ordered.PushBack(bestMove);
 
     Buffer<Move, 50> badAttacks;
@@ -617,7 +649,7 @@ void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMo
         if (move == bestMove)
             continue;
 
-        int64_t see = SEE(move, std::forward<const BoardState>(state));
+        int64_t see = SEE(std::forward<const BoardState>(state), move);
         if (see > 0)
             ordered.PushBack(move);
         else 
@@ -633,7 +665,7 @@ void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMo
 {
     JUPITER_TRACE();
 
-    if (Move::IsValid(bestMove))
+    if (bestMove.IsValid())
         ordered.PushBack(bestMove);
 
     Buffer<Move, 50> badAttacks;
@@ -641,7 +673,7 @@ void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMo
         if (move == bestMove)
             continue;
 
-        int64_t see = SEE(move, std::forward<const BoardState>(state));
+        int64_t see = SEE(std::forward<const BoardState>(state), move);
         if (see > 0)
             ordered.PushBack(move);
         else 
@@ -660,7 +692,7 @@ void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMo
     }
 }
 
-int64_t Searcher::SEE(Move move, const BoardState& state)
+int64_t Searcher::SEE( const BoardState& state, Move move)
 {
     JUPITER_TRACE();
 
