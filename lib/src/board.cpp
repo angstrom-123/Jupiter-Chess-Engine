@@ -148,7 +148,6 @@ namespace libjupiter {
                     return;
                 }
                 m_State.enPassantIndex = first - 'a' + 8 * (7 - (second - '1'));
-                std::cout << "Square: " << first << second << " became index " << static_cast<int64_t>(m_State.enPassantIndex) << std::endl;
             } else {
                 m_InternalState = EngineState::ERROR_BAD_FEN_EN_PASSANT_SQUARE;
                 return;
@@ -177,15 +176,6 @@ namespace libjupiter {
 
         // Save initial board state to history
         m_History.Push(m_State);
-
-        // TODO: Remove
-        OpeningMoves buffer;
-        if (m_OpeningBook.LookupMoves(m_State, buffer)) {
-            for (const auto [move, weight] : buffer) {
-                std::cout.write(move.ToLAN().chars, (Piece::IsValid(move.promote) ? 5 : 4));
-                std::cout << ": " << weight << std::endl;
-            }
-        }
     }
 
     void Board::SetTimeControl(uint64_t seconds, uint64_t increment)
