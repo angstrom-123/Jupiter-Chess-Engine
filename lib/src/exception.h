@@ -5,12 +5,12 @@
 #include <string>
 #include <sstream>
 
-class Exception : public std::runtime_error {
+class JupiterException : public std::runtime_error {
 public:
-    explicit Exception(const std::string& message)
+    explicit JupiterException(const std::string& message)
         : std::runtime_error{Format(message)} {}
 
-    explicit Exception(const char *message)
+    explicit JupiterException(const char *message)
         : std::runtime_error{Format(message)} {}
 
 private:

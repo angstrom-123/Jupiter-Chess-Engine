@@ -29,6 +29,12 @@ make
 cd ../..
 ```
 
+Valid `CMAKE_BUILD_TYPE`'s are: 
+- Release (fastest)
+- Debug (no optimisation + debugging symbols + tracing)
+- Trace (optimised + tracing)
+- Profile (optimised + profiling)
+
 ### Test the Engine
 
 Run the example file:

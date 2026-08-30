@@ -1,5 +1,9 @@
 #include "bitboard.h"
 #include <bit>
+#include <sstream>
+#include "core.h"
+#include "exception.h"
+#include "instrumenter.h"
 
 void BitboardSet::StartPos()
 {
@@ -70,10 +74,14 @@ void BitboardSet::Clear()
 
 bool BitboardSet::Has(Color::Value color, Piece::Value piece, uint8_t index) const
 {
-    JUPITER_TRACE();
+  StackInstrumenter _trace(
+      __func__,
+      "/home/angstrom/personal/dev/cpp/Jupiter-Chess-Interface/engines/Jupiter/"
+      "lib/src/bitboard.cpp",
+      74);
 
-    uint64_t bit = 1ul << index;
-    return m_Bits[color][piece] & bit;
+  uint64_t bit = 1ul << index;
+  return m_Bits[color][piece] & bit;
 }
 
 bool BitboardSet::Has(Color::Value color, uint8_t index) const
@@ -90,6 +98,18 @@ bool BitboardSet::Has(uint8_t index) const
 
     uint64_t bit = 1ul << index;
     return (m_Combined[Color::WHITE] | m_Combined[Color::BLACK]) & bit;
+}
+
+bool BitboardSet::HasAny(const std::initializer_list<std::size_t>& indices) const 
+{
+    JUPITER_TRACE();
+
+    for (const uint8_t index : indices) {
+        uint64_t bit = 1ul << index;
+        if ((m_Combined[Color::WHITE] | m_Combined[Color::BLACK]) & bit)
+            return true;
+    }
+    return false;
 }
 
 uint8_t BitboardSet::Count(Color::Value color, Piece::Value piece) const 
@@ -148,4 +168,81 @@ Bitboard BitboardSet::OccupancyMask() const
     JUPITER_TRACE();
 
     return m_Combined[Color::WHITE] | m_Combined[Color::BLACK];
+}
+
+void BitboardSet::Show() const 
+{
+    JUPITER_TRACE();
+
+    std::stringstream ss;
+
+    const char symbols[Color::MAX_ENUM][Piece::MAX_ENUM] = {
+        { 'P', 'N', 'B', 'R', 'Q', 'K' },
+        { 'p', 'n', 'b', 'r', 'q', 'k' }
+    };
+
+    for (uint64_t i = 0; i < 64; i++) {
+        if (i % 8 == 0)
+            ss << std::endl << "    ";
+        
+        const auto [color, piece] = PieceInSquare(i);
+        if (Color::IsValid(color) && Piece::IsValid(piece))
+            ss << symbols[color][piece] << ' ';
+        else
+            ss << ". ";
+    }
+    INFO(ss.str());
+}
+
+void BitboardSet::Dump() const 
+{
+    JUPITER_TRACE();
+
+    const auto& DisplayBitboard = [](Bitboard bitboard) {
+        std::stringstream ss;
+        for (std::size_t i = 0; i < 64; i++) {
+            if (i % 8 == 0)
+                ss << std::endl;
+
+            ss << ((bitboard & (1ul << i)) ? "x " : ". ");
+        }
+        ss << std::endl;
+        INFO(ss.str());
+    };
+
+    for (Color::Value color = Color::WHITE; color < Color::MAX_ENUM; color = static_cast<Color::Value>(color + 1)) {
+        for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece = static_cast<Piece::Value>(piece + 1)) {
+            INFO(Color::Show(color) << " " << Piece::Show(piece) << ":");
+            DisplayBitboard(m_Bits[color][piece]);
+        }
+    }
+
+    INFO("White combined");
+    DisplayBitboard(m_Combined[Color::WHITE]);
+
+    INFO("Black combined");
+    DisplayBitboard(m_Combined[Color::BLACK]);
+}
+
+void BitboardSet::Validate() const 
+{
+    JUPITER_TRACE();
+
+    if ((m_Combined[Color::WHITE] & m_Combined[Color::BLACK]) == 0)
+        return;
+        
+    for (Piece::Value whitePiece = Piece::PAWN; whitePiece < Piece::MAX_ENUM; whitePiece = static_cast<Piece::Value>(whitePiece + 1)) {
+        for (std::size_t i = 0; i < 64; i++) {
+            for (Piece::Value blackPiece = Piece::PAWN; blackPiece < Piece::MAX_ENUM; blackPiece = static_cast<Piece::Value>(blackPiece + 1)) {
+                uint64_t bit = 1ul << i;
+                if ((m_Bits[Color::WHITE][whitePiece] & bit) && (m_Bits[Color::BLACK][blackPiece] & bit)) {
+                    Dump();
+                    Show();
+                    std::stringstream ss;
+                    ss << "Bitboards invalid: white " << Piece::Show(whitePiece) << " and black " << Piece::Show(blackPiece) << " both on square " << i;
+                    throw JupiterException(ss.str());
+                }
+            }
+        }
+    }
 }

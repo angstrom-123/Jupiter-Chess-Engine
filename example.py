@@ -1,42 +1,51 @@
 #!/usr/bin/env python3
 
+import json
+
 from lib.build.libjupiter import Board
 
-# ========== Create a board ==========
+board: Board = Board("k7/5ppp/8/1r6/8/8/K7/8 b - - 0 1")
 
-# Start Position
-board: Board = Board()
+telemetry: dict = {}
+n_searches: int = 0
 
-# Alternatively Arbitrary FEN
-# board: Board = Board("k7/8/8/8/3R4/8/8/K7 w - - 0 1")
-
-# ========== Check for errors ==========
-
-if board.has_error():
-    error = board.get_error()
-    print(error)
-    exit(1)
-
-# ========== Set Time Control ==========
-
-# Time control
 increment: int = 1
-seconds: int = 30
+seconds: int = 10
 board.set_time_control(seconds, increment)
 
-# ========== Search for best move ==========
+time_remaining_ms: int = 5000
 
-# 10 seconds left
-time_remaining_ms: int = 100000
+while True:
+    best_move: str | None = board.go(time_remaining_ms)
+    if best_move is None:
+        print("done")
+        break 
 
-# Long algebraic notation (e.g. e2e4)
-best_move: str = board.go(time_remaining_ms)
-print(f"Best Move: {best_move}")
+    board.make_move(best_move)
+    n_searches += 1
+    telem: dict = json.loads(board.get_telemetry())
+    if len(telemetry.keys()) == 0:
+        telemetry = telem
+    else:
+        telemetry = { k: telemetry[k] + telem[k] for k in telemetry.keys()}
+    print(repr(board))
 
-# ========== Update Board State ==========
+if telemetry["searchTime"] == 0:
+    print("[JUPITER] No metrics to show - never left opening book")
+else:
+    metrics: dict = json.loads(board.get_metrics())
 
-print(f"\nBefore:\n\n{repr(board)}")
+    print(f"""
+[JUPITER] Game metrics:
+    - avg Nodes Searched  : {(telemetry["nodesSearched"] / n_searches) / 1_000_000:.3f}M
+    - avg Nodes Quiesced  : {(telemetry["nodesQuiesced"] / n_searches) / 1_000_000:.3f}M
+    - avg Search Speed    : {telemetry["nodesSearched"] / (telemetry["searchTime"] * 1000):.3f}mnps 
+    - avg Quiescence %    : {(telemetry["nodesQuiesced"] / telemetry["nodesSearched"]) * 100:.3f}%
+    - avg Lookup %        : {(telemetry["nodesLookedUp"] / telemetry["nodesSearched"]) * 100:.3f}%
+    - avg Completed Depth : {telemetry["depth"] / n_searches:.3f}
+    - TT Occupancy        : {metrics["ttSize"] / (1024 * 1024):.3f}MiB
+    - Book Moves          : {metrics["bookMoves"]}
+    - Searches Completed  : {n_searches}
+""")
 
-board.make_move(best_move)
-
-print(f"\nAfter:\n\n{repr(board)}")
+print(repr(board))

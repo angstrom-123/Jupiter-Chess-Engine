@@ -1,334 +1,403 @@
 #include "movegen.h"
+#include "core.h"
+#include "instrumenter.h"
 #include <bit>
 
-namespace movegen {
-    void FindAttacks(const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
+Move Movegen::Stream(const Evaluator& evaluator, bool attackMode)
+{
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
+
+    switch (m_StreamState) {
+        case StreamState::NONE:
+            FindAttacks();
+            m_StreamState = StreamState::GOOD_ATTACKS;
+            if (m_BestMove.IsValid())
+                return m_BestMove;
+            // Fall through
+        case StreamState::GOOD_ATTACKS:
+            while (m_AttacksIndex < m_Attacks.Size()) {
+                const Move& move = m_Attacks[m_AttacksIndex++];
+                if (move != m_BestMove && evaluator.SEE(std::forward<const BoardState>(m_State), move) > 0)
+                    return move;
+                m_BadAttacks.PushBack(move);
+            }
+            if (!attackMode) {
+                FindQuiets();
+                m_StreamState = StreamState::QUIETS;
+            }
+            // Fall through
+        case StreamState::QUIETS:
+            if (!attackMode) {
+                while (m_QuietsIndex < m_Quiets.Size()) {
+                    const Move move = m_Quiets[m_QuietsIndex++];
+                    if (move != m_BestMove)
+                        return move;
+                }
+            }
+            m_StreamState = StreamState::BAD_ATTACKS;
+            m_AttacksIndex = 0;
+            // Fall through
+        case StreamState::BAD_ATTACKS:
+            while (m_AttacksIndex < m_BadAttacks.Size()) {
+                const Move move = m_BadAttacks[m_AttacksIndex++];
+                if (move != m_BestMove)
+                    return move;
+            }
+            m_StreamState = StreamState::FINISHED;
+            // Fall through
+        case StreamState::FINISHED:
+            return Move::Invalid();
+    }
+}
+
+const AttackMoveBuffer& Movegen::GetAttacks()
+{
+    FindAttacks();
+    return m_Attacks;
+}
+
+const QuietMoveBuffer& Movegen::GetQuiets()
+{
+    FindQuiets();
+    return m_Quiets;
+}
+
+void Movegen::FindAttacks()
+{
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
+
+    m_Attacks.Resize(0);
+
+    // Queens
     {
-        JUPITER_TRACE();
-
-        attackBuffer.Clear();
-
-        // Pawns
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::PAWN);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindPawnAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Knights
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::KNIGHT);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindKnightAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Bishops
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::BISHOP);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindBishopAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Rooks
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::ROOK);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindRookAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Queens
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::QUEEN);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindQueenAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Kings
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::KING);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindKingAttacks(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-                occupancy &= (occupancy - 1);
-            }
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::QUEEN);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindQueenAttacks(index);
+            occupancy &= (occupancy - 1);
         }
     }
 
-    void FindQuiets(const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
+    // Bishops
     {
-        JUPITER_TRACE();
-
-        quietBuffer.Clear();
-
-        // Pawns
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::PAWN);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindPawnQuiets(index, std::forward<const BoardState>(state), quietBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Knights
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::KNIGHT);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindKnightQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Bishops
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::BISHOP);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindBishopQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Rooks
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::ROOK);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindRookQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Queens
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::QUEEN);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindQueenQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
-                occupancy &= (occupancy - 1);
-            }
-        }
-
-        // Kings
-        {
-            Bitboard occupancy = state.pieces.OccupancyMask(state.turn, Piece::KING);
-            while (occupancy) {
-                uint8_t index = std::countr_zero(occupancy);
-                FindKingQuiets(index, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
-                occupancy &= (occupancy - 1);
-            }
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::BISHOP);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindBishopAttacks(index);
+            occupancy &= (occupancy - 1);
         }
     }
 
-    void FindPawnAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
+    // Pawns
     {
-        JUPITER_TRACE();
-
-        const uint64_t backRankMask = 0xFF000000000000FF; // Same for both colors because pawns can't go back
-
-        uint64_t enPassantBit = (state.enPassantIndex != UINT8_MAX) ? 1ul << state.enPassantIndex : 0;
-        Bitboard attacks = table.GetAttacks(index, Piece::PAWN, state.turn, state.pieces.OccupancyMask());
-        attacks &= ~state.pieces.OccupancyMask(state.turn);
-        attacks &= (state.pieces.OccupancyMask(Color::Opposite(state.turn)) | enPassantBit);
-        
-        while (attacks) {
-            uint8_t toIndex = std::countr_zero(attacks);
-            uint64_t toBit = 1ul << toIndex;
-            if (toBit & backRankMask) {
-                // Promotion
-                attackBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::KNIGHT);
-                attackBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::BISHOP);
-                attackBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::ROOK);
-                attackBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::QUEEN);
-            } else {
-                attackBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::Invalid());
-            }
-            attacks &= (attacks - 1);
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::PAWN);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindPawnAttacks(index);
+            occupancy &= (occupancy - 1);
         }
     }
 
-    void FindPawnQuiets(uint8_t index, const BoardState& state, QuietMoveBuffer& quietBuffer)
+    // Knights
     {
-        JUPITER_TRACE();
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::KNIGHT);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindKnightAttacks(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
 
-        const uint64_t backRankMask = 0xFF000000000000FF; // Same for both colors because pawns can't go back
-        const uint64_t homeSquareMask = (state.turn == Color::WHITE) ? 0xFF000000000000 : 0x000000000000FF00;
+    // Rooks
+    {
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::ROOK);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindRookAttacks(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
 
-        // In all cases, need to check if the move is a promotion
+    // Kings
+    {
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::KING);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindKingAttacks(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
 
-        int8_t delta = (state.turn == Color::WHITE) ? -8 : 8;
-        uint8_t toIndex = index + delta;
+#ifdef DEBUG 
+    for (const Move move : m_Attacks) {
+        Color::Value attackerColor = m_State.pieces.PieceInSquare(move.from).first;
+        Color::Value targetColor = m_State.pieces.PieceInSquare(move.to).first;
+        if (targetColor != Color::Opposite(attackerColor)) {
+            m_State.pieces.Dump();
+            throw JupiterException(std::string("Attack move does not attack anything: ") + move.ToLAN().chars);
+        }
+    }
+#endif
+}
+
+void Movegen::FindQuiets()
+{
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
+
+    m_Quiets.Resize(0);
+
+    // Pawns
+    {
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::PAWN);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindPawnQuiets(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
+
+    // Knights
+    {
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::KNIGHT);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindKnightQuiets(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
+
+    // Bishops
+    {
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::BISHOP);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindBishopQuiets(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
+
+    // Rooks
+    {
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::ROOK);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindRookQuiets(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
+
+    // Queens
+    {
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::QUEEN);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindQueenQuiets(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
+
+    // Kings
+    {
+        Bitboard occupancy = m_State.pieces.OccupancyMask(m_State.turn, Piece::KING);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            FindKingQuiets(index);
+            occupancy &= (occupancy - 1);
+        }
+    }
+}
+
+void Movegen::FindPawnAttacks(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    const uint64_t backRankMask = 0xFF000000000000FF; // Same for both colors because pawns can't go back
+
+    uint64_t enPassantBit = (m_State.enPassantIndex != UINT8_MAX) ? 1ul << m_State.enPassantIndex : 0ul;
+    Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::PAWN, m_State.turn, m_State.pieces.OccupancyMask());
+    attacks &= (m_State.pieces.OccupancyMask(Color::Opposite(m_State.turn)) | enPassantBit);
+    
+    while (attacks) {
+        uint8_t toIndex = std::countr_zero(attacks);
         uint64_t toBit = 1ul << toIndex;
-        if (!state.pieces.Has(toIndex)) {
-            if (toBit & backRankMask) {
-                // Promotion
-                quietBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::KNIGHT);
-                quietBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::BISHOP);
-                quietBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::ROOK);
-                quietBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::QUEEN);
-            } else {
-                quietBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::Invalid());
-                toIndex += delta;
-                if (((1ul << index) & homeSquareMask) && !state.pieces.Has(toIndex))
-                    quietBuffer.EmplaceBack(index, toIndex, Piece::PAWN, Piece::Invalid());
-            }
+        if (toBit & backRankMask) {
+            // Promotion
+            m_Attacks.EmplaceBack(index, toIndex, Piece::PAWN, Piece::KNIGHT);
+            m_Attacks.EmplaceBack(index, toIndex, Piece::PAWN, Piece::BISHOP);
+            m_Attacks.EmplaceBack(index, toIndex, Piece::PAWN, Piece::ROOK);
+            m_Attacks.EmplaceBack(index, toIndex, Piece::PAWN, Piece::QUEEN);
+        } else {
+            m_Attacks.EmplaceBack(index, toIndex, Piece::PAWN, Piece::Invalid());
+        }
+        attacks &= (attacks - 1);
+    }
+}
+
+void Movegen::FindPawnQuiets(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    const uint64_t backRankMask = 0xFF000000000000FF; // Same for both colors because pawns can't go back
+    const uint64_t homeSquareMask = (m_State.turn == Color::WHITE) ? 0xFF000000000000 : 0x000000000000FF00;
+
+    // In all cases, need to check if the move is a promotion
+
+    int8_t delta = (m_State.turn == Color::WHITE) ? -8 : 8;
+    uint8_t toIndex = index + delta;
+    uint64_t toBit = 1ul << toIndex;
+    if (!m_State.pieces.Has(toIndex)) {
+        if (toBit & backRankMask) {
+            // Promotion
+            m_Quiets.EmplaceBack(index, toIndex, Piece::PAWN, Piece::KNIGHT);
+            m_Quiets.EmplaceBack(index, toIndex, Piece::PAWN, Piece::BISHOP);
+            m_Quiets.EmplaceBack(index, toIndex, Piece::PAWN, Piece::ROOK);
+            m_Quiets.EmplaceBack(index, toIndex, Piece::PAWN, Piece::QUEEN);
+        } else {
+            m_Quiets.EmplaceBack(index, toIndex, Piece::PAWN, Piece::Invalid());
+            toIndex += delta;
+            if (((1ul << index) & homeSquareMask) && !m_State.pieces.Has(toIndex))
+                m_Quiets.EmplaceBack(index, toIndex, Piece::PAWN, Piece::Invalid());
         }
     }
+}
 
-    void FindKnightAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
+void Movegen::FindKnightAttacks(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::KNIGHT, m_State.turn, 0);
+    attacks &= m_State.pieces.OccupancyMask(Color::Opposite(m_State.turn));
+
+    while (attacks) {
+        uint8_t toIndex = std::countr_zero(attacks);
+        m_Attacks.EmplaceBack(index, toIndex, Piece::KNIGHT, Piece::Invalid());
+        attacks &= (attacks - 1);
+    }
+}
+
+void Movegen::FindKnightQuiets(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::KNIGHT, m_State.turn, 0);
+    attacks &= ~m_State.pieces.OccupancyMask();
+
+    while (attacks) {
+        uint8_t toIndex = std::countr_zero(attacks);
+        m_Quiets.EmplaceBack(index, toIndex, Piece::KNIGHT, Piece::Invalid());
+        attacks &= (attacks - 1);
+    }
+}
+
+void Movegen::FindKingAttacks(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::KING, m_State.turn, 0);
+    attacks &= m_State.pieces.OccupancyMask(Color::Opposite(m_State.turn));
+
+    while (attacks) {
+        uint8_t toIndex = std::countr_zero(attacks);
+        m_Attacks.EmplaceBack(index, toIndex, Piece::KING, Piece::Invalid());
+        attacks &= (attacks - 1);
+    }
+}
+
+void Movegen::FindKingQuiets(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    // Attacks
     {
-        JUPITER_TRACE();
-
-        Bitboard attacks = table.GetAttacks(index, Piece::KNIGHT, state.turn, 0);
-        attacks &= ~state.pieces.OccupancyMask(state.turn);
-        attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
+        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::KING, m_State.turn, 0);
+        attacks &= ~m_State.pieces.OccupancyMask();
 
         while (attacks) {
             uint8_t toIndex = std::countr_zero(attacks);
-            attackBuffer.EmplaceBack(index, toIndex, Piece::KNIGHT, Piece::Invalid());
+            m_Quiets.EmplaceBack(index, toIndex, Piece::KING, Piece::Invalid());
             attacks &= (attacks - 1);
         }
     }
 
-    void FindKnightQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
+    // Castling
     {
-        JUPITER_TRACE();
+        if ((m_State.rights & CastlingRight::Kingside(m_State.turn)) && !m_State.pieces.HasAny({ index + 1ul, index + 2ul }))
+            m_Quiets.EmplaceBack(index, index + 2, Piece::KING, Piece::Invalid());
 
-        Bitboard attacks = table.GetAttacks(index, Piece::KNIGHT, state.turn, 0);
-        attacks &= ~state.pieces.OccupancyMask();
-
-        while (attacks) {
-            uint8_t toIndex = std::countr_zero(attacks);
-            quietBuffer.EmplaceBack(index, toIndex, Piece::KNIGHT, Piece::Invalid());
-            attacks &= (attacks - 1);
-        }
+        if ((m_State.rights & CastlingRight::Queenside(m_State.turn)) && !m_State.pieces.HasAny({ index - 1ul, index - 2ul, index - 3ul }))
+            m_Quiets.EmplaceBack(index, index - 2, Piece::KING, Piece::Invalid());
     }
+}
 
-    void FindKingAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
-    {
-        JUPITER_TRACE();
+void Movegen::FindBishopAttacks(uint8_t index)
+{
+    JUPITER_TRACE();
 
-        Bitboard attacks = table.GetAttacks(index, Piece::KING, state.turn, 0);
-        attacks &= ~state.pieces.OccupancyMask(state.turn);
-        attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
+    FindSliderAttacks(index, Piece::BISHOP);
+}
 
-        while (attacks) {
-            uint8_t toIndex = std::countr_zero(attacks);
-            attackBuffer.EmplaceBack(index, toIndex, Piece::KING, Piece::Invalid());
-            attacks &= (attacks - 1);
-        }
+void Movegen::FindBishopQuiets(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    FindSliderQuiets(index, Piece::BISHOP);
+}
+
+void Movegen::FindRookAttacks(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    FindSliderAttacks(index, Piece::ROOK);
+}
+
+void Movegen::FindRookQuiets(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    FindSliderQuiets(index, Piece::ROOK);
+}
+
+void Movegen::FindQueenAttacks(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    FindSliderAttacks(index, Piece::QUEEN);
+}
+
+void Movegen::FindQueenQuiets(uint8_t index)
+{
+    JUPITER_TRACE();
+
+    FindSliderQuiets(index, Piece::QUEEN);
+}
+
+void Movegen::FindSliderAttacks(uint8_t index, Piece::Value piece)
+{
+    JUPITER_TRACE();
+
+    Bitboard attacks = m_AttackTable.GetAttacks(index, piece, m_State.turn, m_State.pieces.OccupancyMask());
+    attacks &= m_State.pieces.OccupancyMask(Color::Opposite(m_State.turn));
+
+    while (attacks) {
+        uint8_t toIndex = std::countr_zero(attacks);
+        m_Attacks.EmplaceBack(index, toIndex, piece, Piece::Invalid());
+        attacks &= (attacks - 1);
     }
+}
 
-    void FindKingQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
-    {
-        JUPITER_TRACE();
+void Movegen::FindSliderQuiets(uint8_t index, Piece::Value piece)
+{
+    JUPITER_TRACE();
 
-        // Attacks
-        {
-            Bitboard attacks = table.GetAttacks(index, Piece::KING, state.turn, 0);
-            attacks &= ~state.pieces.OccupancyMask();
+    Bitboard attacks = m_AttackTable.GetAttacks(index, piece, m_State.turn, m_State.pieces.OccupancyMask());
+    attacks &= ~m_State.pieces.OccupancyMask();
 
-            while (attacks) {
-                uint8_t toIndex = std::countr_zero(attacks);
-                quietBuffer.EmplaceBack(index, toIndex, Piece::KING, Piece::Invalid());
-                attacks &= (attacks - 1);
-            }
-        }
-
-        // Castling
-        {
-            if ((state.rights & CastlingRight::Kingside(state.turn)) && !state.pieces.Has(index + 1) && !state.pieces.Has(index + 2))
-                quietBuffer.EmplaceBack(index, index + 2, Piece::KING, Piece::Invalid());
-
-            if ((state.rights & CastlingRight::Queenside(state.turn)) && !state.pieces.Has(index - 1) && !state.pieces.Has(index - 2))
-                quietBuffer.EmplaceBack(index, index - 2, Piece::KING, Piece::Invalid());
-        }
-    }
-
-    void FindBishopAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
-    {
-        JUPITER_TRACE();
-
-        FindSliderAttacks(index, Piece::BISHOP, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-    }
-
-    void FindBishopQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
-    {
-        JUPITER_TRACE();
-
-        FindSliderQuiets(index, Piece::BISHOP, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
-    }
-
-    void FindRookAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
-    {
-        JUPITER_TRACE();
-
-        FindSliderAttacks(index, Piece::ROOK, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-    }
-
-    void FindRookQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
-    {
-        JUPITER_TRACE();
-
-        FindSliderQuiets(index, Piece::ROOK, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
-    }
-
-    void FindQueenAttacks(uint8_t index, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
-    {
-        JUPITER_TRACE();
-
-        FindSliderAttacks(index, Piece::QUEEN, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), attackBuffer);
-    }
-
-    void FindQueenQuiets(uint8_t index, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
-    {
-        JUPITER_TRACE();
-
-        FindSliderQuiets(index, Piece::QUEEN, std::forward<const BoardState>(state), std::forward<const AttackTable>(table), quietBuffer);
-    }
-
-    void FindSliderAttacks(uint8_t index, Piece::Value piece, const BoardState& state, const AttackTable& table, AttackMoveBuffer& attackBuffer)
-    {
-        JUPITER_TRACE();
-
-        Bitboard attacks = table.GetAttacks(index, piece, state.turn, state.pieces.OccupancyMask());
-        attacks &= ~state.pieces.OccupancyMask(state.turn);
-        attacks &= state.pieces.OccupancyMask(Color::Opposite(state.turn));
-
-        while (attacks) {
-            uint8_t toIndex = std::countr_zero(attacks);
-            attackBuffer.EmplaceBack(index, toIndex, piece, Piece::Invalid());
-            attacks &= (attacks - 1);
-        }
-    }
-
-    void FindSliderQuiets(uint8_t index, Piece::Value piece, const BoardState& state, const AttackTable& table, QuietMoveBuffer& quietBuffer)
-    {
-        JUPITER_TRACE();
-
-        Bitboard attacks = table.GetAttacks(index, piece, state.turn, state.pieces.OccupancyMask());
-        attacks &= ~state.pieces.OccupancyMask();
-
-        while (attacks) {
-            uint8_t toIndex = std::countr_zero(attacks);
-            quietBuffer.EmplaceBack(index, toIndex, piece, Piece::Invalid());
-            attacks &= (attacks - 1);
-        }
+    while (attacks) {
+        uint8_t toIndex = std::countr_zero(attacks);
+        m_Quiets.EmplaceBack(index, toIndex, piece, Piece::Invalid());
+        attacks &= (attacks - 1);
     }
 }

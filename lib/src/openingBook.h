@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstddef>
+#include <vector>
 #include "buffer.h"
 #include "move.h"
 #include "zobrist.h"
+#include "boardState.h"
 
 using OpeningMoves = Buffer<std::pair<Move, uint16_t>, 5>;
 

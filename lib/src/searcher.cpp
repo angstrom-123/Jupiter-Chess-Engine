@@ -1,442 +1,353 @@
 #include "searcher.h"
 #include "boardState.h"
+#include "executionTimer.h"
+#include "log.h"
 #include "move.h"
 #include "evaluator.h"
 #include "movegen.h"
 #include "transpositionTable.h"
+#include "zobrist.h"
+#include "instrumenter.h"
 
-#include <chrono>
 #include <cmath>
-#include <csignal>
 #include <cstdint>
 #include <ctime>
 #include <bit>
-#include <iostream>
 #include <utility>
 
-namespace chrono = std::chrono;
-
 Searcher::Searcher(Zobrist& zobrist, OpeningBook& openingBook)
-    : m_TranspositionTable(zobrist), m_OpeningBook{openingBook} 
+    : m_Zobrist(zobrist), m_OpeningBook{openingBook} 
 {
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
+
     m_FastRNG.Warm();
 }
 
-Move Searcher::FindBest(const BoardState& state, History& history, uint64_t msRemaining)
+Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemaining)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
-    auto startPoint = chrono::high_resolution_clock::now();
-    uint64_t startMs = chrono::time_point_cast<chrono::milliseconds>(startPoint).time_since_epoch().count();
-
-    // Consult opening book if still valid
-    if (m_InOpeningBook) {
-        Move move = PickOpeningMove(std::forward<const BoardState>(state));
-        if (move.IsValid()) {
-            auto endPoint = chrono::high_resolution_clock::now();
-            uint64_t endMs = chrono::time_point_cast<chrono::milliseconds>(endPoint).time_since_epoch().count();
-
-            uint64_t msTaken = endMs - startMs;
-            std::cout << "Looked up opening move in " << msTaken << "ms" <<  std::endl;
-
-            return move;
-        }
-
-        // Could not find position in opening book so do a full search for all subsequent moves
-        m_InOpeningBook = false;
-    }
-
-    float m = std::max(10l, 50 - static_cast<int64_t>(state.halfMoves) / 2);
-    float i = std::max(0l, static_cast<int64_t>(m_TimeControlIncrement) - 2) * 1000.0;
-    float c = 1.0; // TODO: Set this complexity somehow, and implement search extensions
-    uint64_t targetTimeMs = ((msRemaining / m) * c) + i;
-
-    uint64_t targetMs = startMs + targetTimeMs;
-    std::cout << "Target search time: " << targetTimeMs << "ms" << std::endl;
-
-    BoardState workingState(state);
+    // Keeping these in object scope so all the functions can edit them
     m_SearchAborted = false;
+    nodesSearched = 0;
+    nodesQuiesced = 0;
+    nodesLookedUp = 0;
 
-    m_NodesSearched = 0;
-    m_NodesQuiesced = 0;
-    m_NodesEvaluated = 0;
-    m_TranspositionHits = 0;
+    ExecutionTimer timer;
 
-    // Iterative deepening
-    Move bestMove = Move::Invalid();
+    // If still in opening look up a book move
+    Move openingMove = PickOpeningMove(state);
+    if (openingMove.IsValid())
+        return openingMove;
+
+    // Decide how long to search for
+    uint64_t targetTime = timer.StartTime() + CalculateSearchTime(state, msRemaining);
+
+    Move finalMove = Move::Invalid();
     uint8_t depth = 0;
     while (++depth) {
-        // Only check termination condition every 2048 nodes to save expensive clock calls
-        if ((m_NodesSearched & 2047) == 0) {
-            auto nowPoint = chrono::high_resolution_clock::now();
-            uint64_t nowMs = chrono::time_point_cast<chrono::milliseconds>(nowPoint).time_since_epoch().count();
-            if (nowMs >= targetMs) {
-                std::cout << "Search aborted" << std::endl;
-                break;
-            }
-        }
+        // Check if over time every 4096 nodes
+        if ((nodesSearched & 4095) == 0 && timer.Now() >= targetTime)
+            break;
 
-        AttackMoveBuffer attackMoves;
-        movegen::FindAttacks(std::forward<const BoardState>(state), m_AttackTable, attackMoves);
+        nodesSearched++;
 
-        QuietMoveBuffer quietMoves;
-        movegen::FindQuiets(std::forward<const BoardState>(state), m_AttackTable, quietMoves);
-
-        CombinedMoveBuffer moves;
-        OrderMoves(std::forward<const BoardState>(state), bestMove, attackMoves, quietMoves, moves);
-        std::cout << "Found " << moves.Size() << " moves at root" << std::endl;
-
-        Move depthBestMove = Move::Invalid();
+        Move bestMove = Move::Invalid();
         int64_t bestScore = -INT64_MAX;
         int64_t alpha = -INT64_MAX;
         int64_t beta = INT64_MAX;
 
-        for (Move move : moves) {
-            m_NodesSearched++;
-            MoveData moveData = MakeMove(workingState, move);
-            if (!WasLegal(workingState, moveData)) {
-                UnmakeMove(workingState, moveData);
+        Move move;
+        Movegen movegen = Movegen(state, m_AttackTable);
+        while ((move = movegen.Stream(m_Eval)).IsValid()) {
+            // Make move and check legality
+            MoveData moveData = MakeMove(state, move);
+            if (!WasLegal(state, moveData)) {
+                UnmakeMove(state, moveData);
                 continue;
             }
-            m_NodesEvaluated++;
 
-            int64_t score;
+            // Update state and search
+            history.Push(state);
+            int64_t score = 0;
+            if (!history.IsRepetition())
+                score = -Search(state, history, timer, -beta, -alpha, depth - 1, 1, targetTime);
 
-            // Repetition draw check
-            history.Push(workingState);
-            if (history.IsRepetition()) {
-                score = 0; // TODO: Contempt?
-            } else {
-                score = -Search((SearchInfo) {
-                    .state = workingState, 
-                    .history = history,
-                    .alpha = -beta, 
-                    .beta = -alpha, 
-                    .depth = static_cast<uint8_t>(depth - 1), 
-                    .ply = 1,
-                    .targetMs = targetMs
-                });
-            }
-            UnmakeMove(workingState, moveData);
+            // Undo move
             history.Pop();
+            UnmakeMove(state, moveData);
 
-            // Ran out of time
+            // If search terminated mid-move then we discard the search result
             if (m_SearchAborted)
                 break;
 
+            // Update search terms
             if (score > bestScore) {
                 bestScore = score;
-                depthBestMove = move;
+                bestMove = move;
                 if (score > alpha)
                     alpha = score;
             }
+
+            if (score >= beta)
+                break;
         }
 
-        // Ran out of time - Incomplete search so don't save result
-        if (m_SearchAborted) {
-            std::cout << "Search aborted" << std::endl;
+        // Discard search result if aborted (not complete) or not valid (end of game)
+        if (m_SearchAborted || !bestMove.IsValid())
             break;
-        }
 
-        // Checkmate or stalemate
-        if (!depthBestMove.IsValid()) {
-            std::cout << "Couldn't find a valid move" << std::endl;
-            break;
-        }
-
-        // Save best move
-        bestMove = depthBestMove;
-
-        // Reconstruct and show principal variation at this depth
-        LineBuffer principalVariation;
-        principalVariation.PushBack(bestMove);
-
-        BoardState reconstructState(workingState);
-        MakeMove(reconstructState, bestMove);
-        for (uint8_t i = 1; i < depth; i++) { // Already saved the first move
-            TableEntry entry = m_TranspositionTable.Get(std::forward<const BoardState>(reconstructState));
-            if (!entry.IsValid())
-                break;
-
-            if (!entry.bestMove.IsValid())
-                break;
-
-            MoveData moveData = MakeMove(reconstructState, entry.bestMove);
-            if (!WasLegal(std::forward<const BoardState>(reconstructState), moveData)) {
-                UnmakeMove(reconstructState, moveData);
-                break;
-            }
-
-            principalVariation.PushBack(entry.bestMove);
-        }
-        std::cout << "Principal Variation (depth=" << static_cast<int>(depth) << "): ";
-        for (const auto move : principalVariation)
-            std::cout << move.ToLAN().chars << ", ";
-        std::cout << std::endl;
+        finalMove = bestMove;
     }
-    
-    auto endPoint = chrono::high_resolution_clock::now();
-    uint64_t endMs = chrono::time_point_cast<chrono::milliseconds>(endPoint).time_since_epoch().count();
 
-    uint64_t msTaken = endMs - startMs;
-    float mnpsSearch = static_cast<float>(m_NodesSearched) / static_cast<float>(msTaken) / 1000.0;
-    float mnpsEvaluate = static_cast<float>(m_NodesEvaluated) / static_cast<float>(msTaken) / 1000.0;
-    std::cout << "Searched " << m_NodesSearched << " nodes in " << msTaken << "ms (" << std::setprecision(3) << mnpsSearch << " million nps)" <<  std::endl;
-    std::cout << "  of those Quiesced " << m_NodesQuiesced << " nodes" << std::endl;
-    std::cout << "Evaluated " << m_NodesEvaluated << " nodes in " << msTaken << "ms (" << std::setprecision(3) << mnpsEvaluate << " million nps)" <<  std::endl;
-    std::cout << "Hit " << m_TranspositionHits << " transpositions (" << m_TranspositionTable.OccupiedMiB() << "MiB)" << std::endl;
+    searchDepth = (m_SearchAborted) ? depth - 1 : depth;
+    ttSize = m_TranspositionTable.OccupancyBytes();
 
-    return bestMove;
+    if (searchDepth <= 3)
+        WARN("Extremely low search depth detected");
+
+    return finalMove;
 }
 
-int64_t Searcher::Search(SearchInfo&& info)
+int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, uint8_t depth, uint8_t ply, uint64_t targetMs)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
-    // Only check termination condition every 2048 nodes to save expensive clock calls
-    if ((m_NodesSearched & 2047) == 0) {
-        auto nowPoint = chrono::high_resolution_clock::now();
-        uint64_t nowMs = chrono::time_point_cast<chrono::milliseconds>(nowPoint).time_since_epoch().count();
-        if (nowMs >= info.targetMs) {
-            m_SearchAborted = true;
-            return 0;
-        }
+    int64_t startAlpha = alpha;
+
+    // Check if over time every 4096 nodes
+    if ((nodesSearched & 4095) == 0 && timer.Now() >= targetMs) {
+        m_SearchAborted = true;
+        return 0;
     }
 
-    // Return early if already searched this position to >= depth, else get best move so far
-    Move refutationMove = Move::Invalid();
-    TableEntry lookup = m_TranspositionTable.Get(std::forward<const BoardState>(info.state));
-    if (lookup.IsValid()) {
-        refutationMove = lookup.bestMove;
+    // Check if finished with this search
+    if (depth == 0)
+        return Quiesce(state, history, timer, alpha, beta, ply, targetMs);
 
-        m_TranspositionHits++;
+    nodesSearched++;
 
-        if (lookup.depth >= info.depth) {
-            int64_t score = lookup.score;
+    // Look up TT entry for this position
+    Move ttMove = Move::Invalid();
+    const TableEntry entry = m_TranspositionTable.Get(state.zobristKey);
+    if (entry.IsValid() && entry.depth >= depth) {
+        nodesLookedUp++;
+        ttMove = entry.bestMove;
 
-            if (score > MATE_THRESHOLD) 
-                score -= info.ply;
+        int64_t score = entry.score;
+        if (entry.score > MATE_THRESHOLD)
+            score -= ply;
+        else if (entry.score < -MATE_THRESHOLD)
+            score += ply;
 
-            if (score < -MATE_THRESHOLD) 
-                score += info.ply;
-
-            if (lookup.nodeType == NodeType::LOWER_BOUND)
-                info.alpha = std::max(info.alpha, score);
-
-            if (lookup.nodeType == NodeType::UPPER_BOUND)
-                info.beta = std::min(info.beta, score);
-
-            if (info.alpha >= info.beta)
+        switch (entry.nodeType) {
+            case NodeType::EXACT:
                 return score;
+            case NodeType::LOWER_BOUND:
+                alpha = std::max(alpha, score);
+                break;
+            case NodeType::UPPER_BOUND:
+                beta = std::min(beta, score);
+                break;
         }
+
+        if (alpha >= beta)
+            return (entry.nodeType == NodeType::EXACT) ? score : alpha;
     }
 
-    if (info.depth == 0) 
-        return Quiesce((QuiesceInfo) {
-            .state = info.state, 
-            .history = info.history,
-            .alpha = info.alpha, 
-            .beta = info.beta, 
-            .ply = info.ply,
-            .targetMs = info.targetMs
-        });
-
-    int64_t max = -INT64_MAX;
+    int64_t bestScore = -INT64_MAX;
     Move bestMove = Move::Invalid();
-
-    AttackMoveBuffer attackMoves;
-    movegen::FindAttacks(std::forward<const BoardState>(info.state), m_AttackTable, attackMoves);
-
-    QuietMoveBuffer quietMoves;
-    movegen::FindQuiets(std::forward<const BoardState>(info.state), m_AttackTable, quietMoves);
-
-    CombinedMoveBuffer moves;
-    OrderMoves(std::forward<const BoardState>(info.state), refutationMove, attackMoves, quietMoves, moves);
-
-    int64_t originalAlpha = info.alpha; // For classifying the node type at the end
-
-    for (Move move : moves) {
-        m_NodesSearched++;
-        MoveData moveData = MakeMove(info.state, move);
-        if (!WasLegal(info.state, moveData)) {
-            UnmakeMove(info.state, moveData);
+    Move move;
+    Movegen movegen = Movegen(state, m_AttackTable, ttMove);
+    while ((move = movegen.Stream(m_Eval)).IsValid()) {
+        // Make move and check legality
+        MoveData moveData = MakeMove(state, move);
+        if (!WasLegal(state, moveData)) {
+            UnmakeMove(state, moveData);
             continue;
         }
-        m_NodesEvaluated++;
 
-        int64_t score;
+        // Update state and search
+        history.Push(state);
+        int64_t score = 0;
+        if (!history.IsRepetition())
+            score = -Search(state, history, timer, -beta, -alpha, depth - 1, ply + 1, targetMs);
 
-        // Repetition draw check
-        info.history.Push(info.state);
-        if (info.history.IsRepetition())
-            score = 0; // TODO: Contempt?
-        else
-            score = -Search(SearchInfo::Next(info));
-        UnmakeMove(info.state, moveData);
-        info.history.Pop();
+        // Undo move
+        history.Pop();
+        UnmakeMove(state, moveData);
 
-        if (m_SearchAborted) 
+        // If search terminated mid-move then we discard the search result
+        if (m_SearchAborted)
             return 0;
 
-        if (score > max) {
-            max = score;
+        // Update search terms
+        if (score > bestScore) {
+            bestScore = score;
             bestMove = move;
-
-            // Upper bound
-            if (score > info.alpha)
-                info.alpha = score;
+            if (score > alpha)
+                alpha = score;
         }
 
-        // Lower bound
-        if (score >= info.beta) {
-            m_TranspositionTable.Save(info.state, (const TableEntryInfo) {
-                .score = max,
-                .bestMove = bestMove,
-                .depth = info.depth,
-                .nodeType = NodeType::LOWER_BOUND
-            });
-            return max;
-        }
+        if (score >= beta)
+            break;
     }
 
-    if (!bestMove.IsValid()) {
-        Bitboard king = info.state.pieces.OccupancyMask(info.state.turn, Piece::KING);
-        if (SquareUnderAttack(info.state, king, Color::Opposite(info.state.turn))) 
-            max = -MATE_EVAL + info.ply; // Checkmate
-        else 
-            max = 0; // Stalemate
-    }
-    
-    // Upper bound if raised alpha, else exact
-    m_TranspositionTable.Save(info.state, (const TableEntryInfo) {
-        .score = max,
-        .bestMove = bestMove,
-        .depth = info.depth,
-        .nodeType = (max > originalAlpha) ? NodeType::EXACT : NodeType::UPPER_BOUND
-    });
+    // Checkmate or stalemate
+    if (!bestMove.IsValid())
+        return IsCheckmate(state) ? -MATE_EVAL + ply : 0;
 
-    return max;
+    // Save search results to TT
+    NodeType::Value nodeType = NodeType::EXACT;
+    if (bestScore >= beta)
+        nodeType = NodeType::LOWER_BOUND;
+    else if (bestScore <= startAlpha)
+        nodeType = NodeType::UPPER_BOUND;
+
+    // Score mate without ply in the TT if above the mate threshold
+    int64_t ttScore = bestScore;
+    if (bestScore > MATE_THRESHOLD)
+        ttScore += ply;
+    else if (bestScore < -MATE_THRESHOLD)
+        ttScore -= ply;
+    m_TranspositionTable.Save(state, ttScore, depth, bestMove, nodeType);
+
+    return bestScore;
 }
 
-int64_t Searcher::Quiesce(QuiesceInfo&& info)
+int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, uint8_t ply, uint64_t targetMs)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
-    // Only check termination condition every 2048 nodes to save expensive clock calls
-    if ((m_NodesSearched & 2047) == 0) {
-        auto nowPoint = chrono::high_resolution_clock::now();
-        uint64_t nowMs = chrono::time_point_cast<chrono::milliseconds>(nowPoint).time_since_epoch().count();
-        if (nowMs >= info.targetMs) {
-            m_SearchAborted = true;
-            return 0;
-        }
+    // Only check termination condition every 4096 nodes to save expensive clock calls
+    if ((nodesSearched & 4095) == 0 && timer.Now() >= targetMs) {
+        m_SearchAborted = true;
+        return 0;
     }
 
-    int64_t staticEval = m_Eval.Evaluate(info.state);
+    nodesQuiesced++;
+    nodesSearched++;
 
-    // Stand Pat
-    int64_t max = staticEval;
-    if (max >= info.beta)
-        return max;
-    if (max > info.alpha)
-        info.alpha = max;
+    // Standing Pat
+    int64_t bestScore = m_Eval.Evaluate(state);
 
+    // Update search terms
+    if (bestScore > alpha)
+        alpha = bestScore;
+
+    if (alpha >= beta)
+        return bestScore;
+
+    // TODO
     // Transposition Lookup
-    Move refutationMove = Move::Invalid();
-    TableEntry lookup = m_TranspositionTable.Get(std::forward<const BoardState>(info.state));
-    if (lookup.IsValid()) {
-        // Only save refutation move if it is a capture (as this is a quiescence search)
-        if (Piece::IsValid(info.state.pieces.PieceInSquare(Color::Opposite(info.state.turn), lookup.bestMove.to)))
-            refutationMove = lookup.bestMove;
+    Move ttMove = Move::Invalid();
+    TableEntry entry = m_TranspositionTable.Get(state.zobristKey);
+    if (entry.IsValid()) {
+        nodesLookedUp++;
+        ttMove = entry.bestMove;
 
-        m_TranspositionHits++;
+        int64_t score = entry.score;
+        if (entry.score > MATE_THRESHOLD)
+            score -= ply;
+        else if (entry.score < -MATE_THRESHOLD)
+            score += ply;
 
-        int64_t score = lookup.score;
+        switch (entry.nodeType) {
+            case NodeType::EXACT:
+                return score;
+            case NodeType::LOWER_BOUND:
+                alpha = std::max(alpha, score);
+                break;
+            case NodeType::UPPER_BOUND:
+                beta = std::min(beta, score);
+                break;
+        }
 
-        if (score > MATE_THRESHOLD) 
-            score -= info.ply;
-
-        if (score < -MATE_THRESHOLD) 
-            score += info.ply;
-
-        if (lookup.nodeType == NodeType::LOWER_BOUND)
-            info.alpha = std::max(info.alpha, score);
-
-        if (lookup.nodeType == NodeType::UPPER_BOUND)
-            info.beta = std::min(info.beta, score);
-
-        if (info.alpha >= info.beta)
+        // Fail soft here is really important, stops shuffling around when mate is possible
+        if (alpha >= beta)
             return score;
     }
 
-    AttackMoveBuffer attackMoves;
-    movegen::FindAttacks(info.state, m_AttackTable, attackMoves);
+    const uint8_t phase = m_Eval.GamePhase(std::forward<const BoardState>(state));
 
-    CombinedMoveBuffer moves;
-    OrderMoves(std::forward<const BoardState>(info.state), refutationMove, attackMoves, moves);
-
-    const uint8_t phase = m_Eval.GamePhase(std::forward<const BoardState>(info.state)) < 90;
-
-    for (const Move move : moves) {
+    Move move;
+    Movegen movegen = Movegen(state, m_AttackTable, ttMove);
+    while ((move = movegen.Stream(m_Eval, true)).IsValid()) {
         // Delta pruning
-        if (phase < 85) { // Don't prune in late endgames
+        if (phase < 80) { // Don't prune in late game
             const int64_t DELTA_MARGIN = 200;
             if (!Piece::IsValid(move.promote)) { // Don't prune promotions
-
-                Piece::Value capture = info.state.pieces.PieceInSquare(Color::Opposite(info.state.turn), move.to);
+                Piece::Value capture = state.pieces.PieceInSquare(Color::Opposite(state.turn), move.to);
                 if (!Piece::IsValid(capture)) // en passant
-                    capture = info.state.pieces.PieceInSquare(Color::Opposite(info.state.turn), (info.state.turn == Color::WHITE) ? move.to + 8 : move.to - 8);
+                    capture = Piece::PAWN;
 
-                if (staticEval + Piece::Evaluate(capture) + DELTA_MARGIN < info.alpha)
+                // If the capture doesn't raise alpha then skip the move
+                if (bestScore + Piece::Evaluate(capture) + DELTA_MARGIN < alpha)
                     continue;
             }
         }
 
-        m_NodesSearched++;
-        m_NodesQuiesced++;
-
-        MoveData moveData = MakeMove(info.state, move);
-        if (!WasLegal(info.state, moveData)) {
-            UnmakeMove(info.state, moveData);
+        // Make move and check legality
+        MoveData moveData = MakeMove(state, move);
+        if (!WasLegal(state, moveData)) {
+            UnmakeMove(state, moveData);
             continue;
         }
-        m_NodesEvaluated++;
 
-        int64_t score;
+        // Update state and search
+        history.Push(state);
+        int64_t score = 0;
+        if (!history.IsRepetition())
+            score = -Quiesce(state, history, timer, -beta, -alpha, ply + 1, targetMs);
 
-        // Repetition draw check
-        info.history.Push(info.state);
-        if (info.history.IsRepetition())
-            score = 0; // TODO: Contempt?
-        else
-            score = -Quiesce(QuiesceInfo::Next(info));
-        UnmakeMove(info.state, moveData);
-        info.history.Pop();
+        // Undo move
+        history.Pop();
+        UnmakeMove(state, moveData);
 
-        if (score >= info.beta)
-            return score;
+        // If search terminated mid-move then we discard the search result
+        if (m_SearchAborted)
+            return 0;
 
-        if (score > max)
-            max = score;
+        // Update search terms
+        if (score > bestScore) {
+            bestScore = score;
+            if (score > alpha)
+                alpha = score;
+        }
 
-        if (score > info.alpha)
-            info.alpha = score;
+        if (score >= beta)
+            break;
     }
 
-    return max;
+    return bestScore;
 }
 
 void Searcher::SetTimeControl(uint64_t seconds, uint64_t increment)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     m_TimeControlSeconds = seconds;
     m_TimeControlIncrement = increment;
 }
 
+bool Searcher::IsCheckmate(const BoardState& state)
+{
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
+
+    uint64_t kingBit = state.pieces.OccupancyMask(state.turn, Piece::KING);
+    return SquareUnderAttack(state, kingBit, Color::Opposite(state.turn));
+}
+
 MoveData Searcher::MakeMove(BoardState& state, Move move)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     Piece::Value capture = state.pieces.PieceInSquare(move.to).second;
 
@@ -445,86 +356,202 @@ MoveData Searcher::MakeMove(BoardState& state, Move move)
 
     // For unmaking the move later
     MoveData moveData = {
+        .zobristKey = state.zobristKey,
         .move = move,
         .capture = capture,
         .rights = state.rights,
         .turn = state.turn,
         .enPassantIndex = state.enPassantIndex,
+        .fiftyMoveCounter = state.fiftyMoveCounter,
         .halfMoves = state.halfMoves
     };
 
     // Move piece
     state.pieces.Unset(friendly, move.piece, move.from);
-    if (Piece::IsValid(move.promote))
+    state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, move.piece, move.from);
+    if (Piece::IsValid(move.promote)) {
         state.pieces.Set(friendly, move.promote, move.to);
-    else
+        state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, move.promote, move.to);
+    } else {
         state.pieces.Set(friendly, move.piece, move.to);
+        state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, move.piece, move.to);
+    }
 
     // Remove capture
-    if (Piece::IsValid(capture))
+    if (Piece::IsValid(capture)) {
         state.pieces.Unset(enemy, capture, move.to);
+        state.zobristKey ^= m_Zobrist.ValueForPiece(enemy, capture, move.to);
+    }
 
     // Move rook if castling
     if (move.piece == Piece::KING && Difference(move.from, move.to) == 2) {
         if (move.from > move.to) {
             state.pieces.Unset(friendly, Piece::ROOK, move.from - 4);
+            state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, Piece::ROOK, move.from - 4);
             state.pieces.Set(friendly, Piece::ROOK, move.from - 1);
+            state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, Piece::ROOK, move.from - 1);
         } else {
             state.pieces.Unset(friendly, Piece::ROOK, move.from + 3);
+            state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, Piece::ROOK, move.from + 3);
             state.pieces.Set(friendly, Piece::ROOK, move.from + 1);
+            state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, Piece::ROOK, move.from + 1);
         }
     }
 
     // Remove pawn if en passant
-    if (move.piece == Piece::PAWN && move.to == state.enPassantIndex)
-        state.pieces.Unset(enemy, Piece::PAWN, (friendly == Color::WHITE) ? move.to + 8 : move.to - 8);
+    if (move.piece == Piece::PAWN && move.to == state.enPassantIndex) {
+        uint8_t pawnIndex = (friendly == Color::WHITE) ? move.to + 8 : move.to - 8;
+        state.pieces.Unset(enemy, Piece::PAWN, pawnIndex);
+        state.zobristKey ^= m_Zobrist.ValueForPiece(enemy, Piece::PAWN, pawnIndex);
+    }
 
     // Avoid updating castling rights after both sides lose the right
     if (state.rights > 0) {
         // Remove castling rights if king moved
-        if (move.piece == Piece::KING)
+        if (move.piece == Piece::KING) {
+            state.zobristKey ^= m_Zobrist.ValueForRights(state.rights);
             state.rights = 0;
+        }
 
         // Remove castling rights if rook moved from start square
         if (move.piece == Piece::ROOK) {
-            if (move.from == (friendly == Color::WHITE ? 63 : 7))
+            if (move.from == (friendly == Color::WHITE ? 63 : 7)) {
                 state.rights &= ~CastlingRight::Kingside(friendly);
-            else if (move.from == (friendly == Color::WHITE ? 56 : 0))
+                state.zobristKey ^= m_Zobrist.ValueForRights(CastlingRight::Kingside(friendly));
+            } else if (move.from == (friendly == Color::WHITE ? 56 : 0)) {
                 state.rights &= ~CastlingRight::Queenside(friendly);
+                state.zobristKey ^= m_Zobrist.ValueForRights(CastlingRight::Queenside(friendly));
+            }
         }
 
         // Remove castling rights if rook captured on start square
         if (capture == Piece::ROOK) {
-            if (move.to == (enemy == Color::WHITE ? 63 : 7))
+            if (move.to == (enemy == Color::WHITE ? 63 : 7)) {
                 state.rights &= ~CastlingRight::Kingside(enemy);
-            else if (move.from == (enemy == Color::WHITE ? 56 : 0))
+                state.zobristKey ^= m_Zobrist.ValueForRights(CastlingRight::Kingside(enemy));
+            } else if (move.to == (enemy == Color::WHITE ? 56 : 0)) {
                 state.rights &= ~CastlingRight::Queenside(enemy);
+                state.zobristKey ^= m_Zobrist.ValueForRights(CastlingRight::Queenside(enemy));
+            }
         }
     }
 
     // Update en passant square if double pawn push
-    state.enPassantIndex = UINT8_MAX;
-    if (move.piece == Piece::PAWN && Difference(move.from, move.to) == 16)
-        state.enPassantIndex = (friendly == Color::WHITE) ? move.to + 8 : move.to - 8;
+    if (state.enPassantIndex != UINT8_MAX) {
+        state.zobristKey ^= m_Zobrist.ValueForEnPassant(state.enPassantIndex);
+        state.enPassantIndex = UINT8_MAX;
+    }
+    if (move.piece == Piece::PAWN && Difference(move.from, move.to) == 16) {
+        // Check if any of our pawns can en passant the opponent pawn that just double pushed
+        // This means that two identical positions (except for the en passant square) will hash to 
+        // the same value as long as there is no pawn to capture en passant.
+        // This check only accounts for pseudo-legal en passant captures but is better than nothing.
+        uint8_t enPassantIndex = (friendly == Color::WHITE) ? move.to + 8 : move.to - 8;
+        uint8_t file = enPassantIndex & 7;
+        uint64_t adjacentMask = 0;
+        if (file > 0) adjacentMask |= (1ul << (move.to - 1));
+        if (file < 7) adjacentMask |= (1ul << (move.to + 1));
+        if (adjacentMask & state.pieces.OccupancyMask(enemy, Piece::PAWN)) {
+            state.zobristKey ^= m_Zobrist.ValueForEnPassant(enPassantIndex);
+            state.enPassantIndex = enPassantIndex;
+        }
+    }
+
+    // Update 50 move counter
+    if (Piece::IsValid(capture) || move.piece == Piece::PAWN)
+        state.fiftyMoveCounter = 0;
+    else
+        state.fiftyMoveCounter++;
 
     state.turn = enemy;
+    state.zobristKey ^= m_Zobrist.ValueForTurn(friendly);
+    state.zobristKey ^= m_Zobrist.ValueForTurn(enemy);
+
     state.halfMoves++;
 
     return moveData;
 }
 
+void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth)
+{
+    JUPITER_TRACE();
+
+    // TODO: Call this function somewhere
+
+    // Reconstruct engine's line
+    BoardState reconstructState(state); // This mangles state so make a copy
+    LineBuffer principalVariation;
+    principalVariation.Clear();
+
+    // Save the first move
+    principalVariation.PushBack(firstMove);
+    MakeMove(reconstructState, firstMove);
+
+    // Iterate over TT entries to find the moves from here
+    for (uint8_t i = 1; i < depth; i++) {
+        TableEntry entry = m_TranspositionTable.Get(reconstructState.zobristKey);
+        if (!entry.IsValid() || !entry.bestMove.IsValid())
+            break;
+
+        // Try to save the next move in line
+        MoveData moveData = MakeMove(reconstructState, entry.bestMove);
+
+        // If it isn't legal then we terminate the PV search
+        if (!WasLegal(std::forward<const BoardState>(reconstructState), moveData)) {
+            UnmakeMove(reconstructState, moveData);
+            break;
+        }
+
+        // Save the move to the line
+        principalVariation.PushBack(entry.bestMove);
+    }
+}
+
+// TODO: I think checkmate ply calculations are backwards??
+//       Black was just not going for it?
+//       Check it for white too 
+//       Set up a test position temporarily
+
+// TODO: Search extensions
+uint64_t Searcher::CalculateSearchTime(const BoardState& state, uint64_t msRemaining)
+{
+    JUPITER_TRACE();
+
+    float incrementMs = m_TimeControlIncrement * 1000.0;
+    searchTime = msRemaining / 20.0 + incrementMs / 2.0;
+
+    // TODO: Estimate position complexity (just using game phase for now)
+    float c = 1.0;
+    int64_t phase = m_Eval.GamePhase(std::forward<const BoardState>(state));
+    if (phase > 15 && phase < 60)
+        c += 0.10;
+
+    searchTime *= c;
+    return searchTime;
+}
+
 Move Searcher::PickOpeningMove(const BoardState& state)
 {
-    OpeningMoves moves;
-    if (!m_OpeningBook.LookupMoves(std::forward<const BoardState>(state), moves))
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
+
+    if (!m_InOpeningBook)
         return Move::Invalid();
 
+    OpeningMoves moves;
+    if (!m_OpeningBook.LookupMoves(std::forward<const BoardState>(state), moves)) {
+        m_InOpeningBook = false;
+        return Move::Invalid();
+    }
+
+    bookMoves++;
     return moves[m_FastRNG.Generate() % moves.Size()].first;
 }
 
 void Searcher::UnmakeMove(BoardState& state, MoveData moveData)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     const Move& move = moveData.move;
 
@@ -562,6 +589,8 @@ void Searcher::UnmakeMove(BoardState& state, MoveData moveData)
     state.turn = moveData.turn;
     state.enPassantIndex = moveData.enPassantIndex;
     state.halfMoves = moveData.halfMoves;
+    state.fiftyMoveCounter = moveData.fiftyMoveCounter;
+    state.zobristKey = moveData.zobristKey;
 }
 
 bool Searcher::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::Value color)
@@ -572,17 +601,10 @@ bool Searcher::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::V
     Color::Value enemy = Color::Opposite(color);
     Bitboard occupancy = state.pieces.OccupancyMask();
 
-    // Pawns
+    // Queens
     {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::PAWN, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::PAWN))
-            return true;
-    }
-
-    // Knights
-    {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::KNIGHT, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::KNIGHT))
+        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::QUEEN, enemy, occupancy);
+        if (attacks & state.pieces.OccupancyMask(color, Piece::QUEEN))
             return true;
     }
 
@@ -600,10 +622,17 @@ bool Searcher::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::V
             return true;
     }
 
-    // Queens
+    // Pawns
     {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::QUEEN, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::QUEEN))
+        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::PAWN, enemy, occupancy);
+        if (attacks & state.pieces.OccupancyMask(color, Piece::PAWN))
+            return true;
+    }
+
+    // Knights
+    {
+        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::KNIGHT, enemy, occupancy);
+        if (attacks & state.pieces.OccupancyMask(color, Piece::KNIGHT))
             return true;
     }
 
@@ -620,6 +649,7 @@ bool Searcher::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::V
 bool Searcher::WasLegal(const BoardState& state, MoveData moveData)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     Bitboard king = state.pieces.OccupancyMask(moveData.turn, Piece::KING);
 
@@ -635,131 +665,4 @@ bool Searcher::WasLegal(const BoardState& state, MoveData moveData)
     }
 
     return !targetAttacked;
-}
-
-void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMoveBuffer& attacks, CombinedMoveBuffer& ordered)
-{
-    JUPITER_TRACE();
-
-    if (bestMove.IsValid())
-        ordered.PushBack(bestMove);
-
-    Buffer<Move, 50> badAttacks;
-    for (const Move move : attacks) {
-        if (move == bestMove)
-            continue;
-
-        int64_t see = SEE(std::forward<const BoardState>(state), move);
-        if (see > 0)
-            ordered.PushBack(move);
-        else 
-            badAttacks.PushBack(move);
-    }
-
-    for (const Move move : badAttacks) {
-        ordered.PushBack(move);
-    }
-}
-
-void Searcher::OrderMoves(const BoardState& state, Move bestMove, const AttackMoveBuffer& attacks, const QuietMoveBuffer& quiets, CombinedMoveBuffer& ordered)
-{
-    JUPITER_TRACE();
-
-    if (bestMove.IsValid())
-        ordered.PushBack(bestMove);
-
-    Buffer<Move, 50> badAttacks;
-    for (const Move move : attacks) {
-        if (move == bestMove)
-            continue;
-
-        int64_t see = SEE(std::forward<const BoardState>(state), move);
-        if (see > 0)
-            ordered.PushBack(move);
-        else 
-            badAttacks.PushBack(move);
-    }
-
-    for (const Move move : quiets) {
-        if (move == bestMove)
-            continue;
-
-        ordered.PushBack(move);
-    }
-
-    for (const Move move : badAttacks) {
-        ordered.PushBack(move);
-    }
-}
-
-int64_t Searcher::SEE( const BoardState& state, Move move)
-{
-    JUPITER_TRACE();
-
-    BitboardSet pieces(state.pieces);
-    Color::Value enemy = Color::Opposite(state.turn);
-
-    // Simulate first capture
-    Piece::Value firstCapture = pieces.PieceInSquare(enemy, move.to);
-    if (!Piece::IsValid(firstCapture)) // en passant
-        firstCapture = pieces.PieceInSquare(enemy, (enemy == Color::WHITE) ? move.to - 8 : move.to + 8);
-    pieces.Unset(enemy, firstCapture, move.to);
-    pieces.Unset(state.turn, move.piece, move.from);
-    pieces.Set(state.turn, move.piece, move.to);
-
-    Buffer<int64_t, 16> gain;
-    gain.PushBack(Piece::Evaluate(firstCapture));
-
-    // TODO: Don't recalculate attackers at each iteration, just update the bitboards 
-    //       iteratively at each step. Then only sliders need recalculation (in case of discovery).
-
-    Color::Value turn = enemy;
-    Piece::Value target = move.piece;
-    while (true) {
-        Color::Value opponentTurn = Color::Opposite(turn);
-
-        // Find attackers
-        Bitboard attackers[Color::MAX_ENUM][Piece::MAX_ENUM];
-        for (uint8_t i = Color::WHITE; i < Color::MAX_ENUM; i++) {
-            Color::Value friendly = static_cast<Color::Value>(i);
-            Color::Value opponent = Color::Opposite(friendly);
-            for (uint8_t j = Piece::PAWN; j < Piece::MAX_ENUM; j++) {
-                Piece::Value piece = static_cast<Piece::Value>(j);
-                attackers[friendly][piece] = m_AttackTable.GetAttacks(move.to, piece, opponent, pieces.OccupancyMask()) & pieces.OccupancyMask(friendly, piece);
-            }
-        }
-
-        // Find least valuable attacker
-        uint8_t from = UINT8_MAX;
-        Piece::Value attacker = Piece::Invalid();
-        for (uint8_t i = Piece::PAWN; i < Piece::MAX_ENUM; i++) {
-            Bitboard attackerOccupancy = attackers[turn][i];
-            if (attackerOccupancy) {
-                from = std::countr_zero(attackerOccupancy);
-                attacker = static_cast<Piece::Value>(i);
-                attackers[turn][i] &= (attackerOccupancy - 1);
-                break;
-            }
-        }
-        if (!Piece::IsValid(attacker))
-            break;
-
-        // Update gain
-        gain.PushBack(Piece::Evaluate(target) - gain[gain.Size() - 1]);
-
-        // Simulate capture
-        pieces.Unset(turn, attacker, from);
-        pieces.Unset(opponentTurn, target, move.to);
-        pieces.Set(turn, attacker, move.to);
-
-        // Swap turn
-        target = attacker;
-        turn = Color::Opposite(turn);
-    }
-
-    // Traverse gain
-    for (int8_t i = static_cast<int8_t>(gain.Size()) - 1; i > 0; i--)
-        gain[i - 1] = -std::max(-gain[i - 1], gain[i]);
-
-    return gain[0];
 }

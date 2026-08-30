@@ -1,12 +1,10 @@
 #include "openingBook.h"
 
-#include <cassert>
-#include <csignal>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include "core.h"
-#include "stackTrace.h"
+#include "instrumenter.h"
 
 namespace fs = std::filesystem;
 
@@ -224,9 +222,9 @@ const uint64_t randoms[781] = {
 OpeningBook::OpeningBook()
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     // Read in polyglot file
-    std::cout << "Reading book at: " << BOOK_FILE_PATH.string() << std::endl;
     std::ifstream file(BOOK_FILE_PATH, std::ios::in | std::ios::binary | std::ios::ate);
     m_FileSizeBytes = file.tellg();
     file.seekg(0, std::ios::beg);
@@ -236,12 +234,13 @@ OpeningBook::OpeningBook()
     // Warning in case it is very large
     const std::size_t fiftyMiB = 50ul * 1024ul * 1024ul * 1024ul;
     if (m_FileSizeBytes > fiftyMiB)
-        std::cout << "WARNING: Opening book is large (" << m_FileSizeBytes / (1024 * 1024 * 1024) << "MiB)" << std::endl;;
+        WARN("Opening book is large (" << m_FileSizeBytes / (1024 * 1024 * 1024) << "MiB)");
 }
 
 bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     // Binary search (Polyglot orders keys ascending)
     ZobristKey targetKey = ZobristHash(std::forward<const BoardState>(state));
@@ -294,6 +293,7 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves)
 std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64_t bits)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     if (bits == 0)
         return std::make_pair(Move::Invalid(), 0);
@@ -305,9 +305,7 @@ std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64
     uint8_t fromFile = (moveBits & 0b0000000111000000) >> 6;
     uint8_t fromRow  = (moveBits & 0b0000111000000000) >> 9;
     uint8_t promote  = (moveBits & 0b0111000000000000) >> 12;
-    const Piece::Value mapping[5] = { 
-        Piece::Invalid(), Piece::KNIGHT, Piece::BISHOP, Piece::ROOK, Piece::QUEEN 
-    };
+    const Piece::Value mapping[5] = { Piece::Invalid(), Piece::KNIGHT, Piece::BISHOP, Piece::ROOK, Piece::QUEEN };
 
     // Polyglot's board is verticaly flipped compared to mine
     uint8_t fromIndex = ToIndex(fromFile, 7 - fromRow);
@@ -318,6 +316,15 @@ std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64
         .piece = state.pieces.PieceInSquare(fromIndex).second,
         .promote = mapping[promote],
     };
+
+    // Polyglot stores castling as king moving to rook but I store it as king moving 2 squares
+    if (move.piece == Piece::KING) {
+        // Underflow here is ok - condition still passes
+        if (move.from - move.to == 4)
+            move.to = move.from - 2;
+        else if (move.to - move.from == 3)
+            move.to = move.from + 2;
+    }
 
     // Weight
     const uint16_t weightBits = (bits & 0x0000FFFF00000000) >> 32;
@@ -333,6 +340,7 @@ std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64
 ZobristKey OpeningBook::ZobristHash(const BoardState& state)
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     ZobristKey key = 0;
     uint64_t offset = 0;
@@ -391,8 +399,6 @@ ZobristKey OpeningBook::ZobristHash(const BoardState& state)
     if (state.turn == Color::WHITE)
         key ^= randoms[offset];
     offset++;
-
-    assert(offset == ZOBRIST_NUMBER_COUNT && "Mistake in zobrist offset computation");
 
     return key;
 }

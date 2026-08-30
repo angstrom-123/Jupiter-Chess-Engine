@@ -1,4 +1,5 @@
 #include <charconv>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -6,13 +7,15 @@
 
 #include "libjupiter/board.h"
 #include "core.h"
+#include "exception.h"
+#include "instrumenter.h"
 #include "move.h"
 #include "openingBook.h"
 #include "zobrist.h"
 
 namespace libjupiter {
     Board::Board(const char *fen)
-        : m_Zobrist(), m_OpeningBook(), m_History(m_Zobrist), m_Searcher(m_Zobrist, m_OpeningBook)
+        : m_Zobrist(), m_OpeningBook(), m_Searcher(m_Zobrist, m_OpeningBook)
     {
         JUPITER_TRACE();
 
@@ -26,6 +29,7 @@ namespace libjupiter {
             m_State.turn = Color::WHITE;
             m_State.enPassantIndex = UINT8_MAX;
             m_State.halfMoves = 0;
+            m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
             return;
         }
 
@@ -34,10 +38,8 @@ namespace libjupiter {
 
         // Split at delimiters and initial validation
         FenView views[13];
-        if (!SplitFEN(fen, length, views)) {
-            m_InternalState = EngineState::ERROR_MALFORMED_FEN_STRING;
-            return;
-        }
+        if (!SplitFEN(fen, length, views))
+            throw JupiterException(std::string("Malformed FEN string: ") + fen);
 
         // Read piece positions
         {
@@ -45,10 +47,8 @@ namespace libjupiter {
             for (uint64_t i = 0; i < 8; i++) {
                 const FenView& v = views[i];
                 for (uint64_t j = v.start; j < v.end; j++) {
-                    if (boardIndex >= 64) {
-                        m_InternalState = EngineState::ERROR_BAD_FEN_POSITIONS;
-                        return;
-                    }
+                    if (boardIndex >= 64)
+                        throw JupiterException(std::string("Bad piece positions in FEN string: ") + fen);
 
                     char c = fen[j];
                     Color::Value color = (c > 'Z') ? Color::BLACK : Color::WHITE;
@@ -75,8 +75,7 @@ namespace libjupiter {
                             m_State.pieces.Set(color, Piece::KING, boardIndex);
                             break;
                         default:
-                            m_InternalState = EngineState::ERROR_BAD_FEN_POSITIONS;
-                            return;
+                            throw JupiterException(std::string("Bad piece positions in FEN string: ") + fen);
                     }
                     boardIndex++;
                 }
@@ -86,19 +85,14 @@ namespace libjupiter {
         // Read color to move 
         {
             const FenView& v = views[8];
-            if (v.end - v.start > 1) {
-                m_InternalState = EngineState::ERROR_BAD_FEN_ACTIVE_COLOR;
-                return;
-            }
-
-            if (fen[v.start] == 'w') {
+            if (v.end - v.start > 1)
+                throw JupiterException("Bad turn to move in FEN string");
+            if (fen[v.start] == 'w')
                 m_State.turn = Color::WHITE;
-            } else if (fen[v.start] == 'b') {
-                m_State.turn = Color::BLACK;
-            } else {
-                m_InternalState = EngineState::ERROR_BAD_FEN_ACTIVE_COLOR;
-                return;
-            }
+            else if (fen[v.start] == 'b')
+              m_State.turn = Color::BLACK;
+            else
+              throw JupiterException("Bad turn to move in FEN string");
         }
 
         // Read castling rights
@@ -106,12 +100,7 @@ namespace libjupiter {
             const FenView& v = views[9];
             m_State.rights = 0;
 
-            if (v.end - v.start == 1) {
-                if (fen[v.start] != '-') {
-                    m_InternalState = EngineState::ERROR_BAD_FEN_CASTLING_RIGHTS;
-                    return;
-                }
-            } else {
+            if (fen[v.start] != '-') {
                 for (uint64_t i = v.start; i < v.end; i++) {
                     char c = fen[i];
                     switch (c) {
@@ -128,8 +117,7 @@ namespace libjupiter {
                             m_State.rights |= CastlingRight::QUEENSIDE_BLACK;
                             break;
                         default:
-                            m_InternalState = EngineState::ERROR_BAD_FEN_CASTLING_RIGHTS;
-                            return;
+                            throw JupiterException(std::string("Bad castling rights in FEN string: ") + fen);
                     }
                 }
             }
@@ -143,14 +131,11 @@ namespace libjupiter {
             } else if (v.end - v.start == 2) {
                 char first = fen[v.start];
                 char second = fen[v.start + 1];
-                if (first < 'a' || first > 'h' || second < '1' || second > '8') {
-                    m_InternalState = EngineState::ERROR_BAD_FEN_EN_PASSANT_SQUARE;
-                    return;
-                }
+                if (first < 'a' || first > 'h' || second < '1' || second > '8')
+                    throw JupiterException(std::string("Bad en passant square in FEN string: ") + fen);
                 m_State.enPassantIndex = first - 'a' + 8 * (7 - (second - '1'));
             } else {
-                m_InternalState = EngineState::ERROR_BAD_FEN_EN_PASSANT_SQUARE;
-                return;
+                throw JupiterException(std::string("Bad en passant square in FEN string: ") + fen);
             }
         }
 
@@ -158,29 +143,32 @@ namespace libjupiter {
         {
             const FenView& v = views[11];
             auto res = std::from_chars(&fen[v.start], &fen[v.end], m_State.halfMoves);
-            if (res.ec != std::errc()) {
-                m_InternalState = EngineState::ERROR_BAD_FEN_HALF_MOVE_COUNTER;
-                return;
-            }
+            if (res.ec != std::errc())
+                throw JupiterException(std::string("Bad half move counter in FEN string: ") + fen);
         }
 
         // Read full-move counter 
         {
             const FenView& v = views[12];
             auto res = std::from_chars(&fen[v.start], &fen[v.end], m_FullMoves);
-            if (res.ec != std::errc()) {
-                m_InternalState = EngineState::ERROR_BAD_FEN_FULL_MOVE_COUNTER;
-                return;
-            }
+            if (res.ec != std::errc())
+                throw JupiterException(std::string("Bad half move counter in FEN string: ") + fen);
         }
 
         // Save initial board state to history
+        m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
         m_History.Push(m_State);
+    }
+
+    Board::~Board()
+    {
+        JUPITER_PROFILING_END();
     }
 
     void Board::SetTimeControl(uint64_t seconds, uint64_t increment)
     {
         JUPITER_TRACE();
+        JUPITER_PROFILE();
 
         m_Searcher.SetTimeControl(seconds, increment);
     }
@@ -188,72 +176,64 @@ namespace libjupiter {
     Move Board::Go(uint64_t moveMs)
     {
         JUPITER_TRACE();
-        // TODO: 50-move rule
+        JUPITER_PROFILE();
 
-        Move bestMove = m_Searcher.FindBest(m_State, m_History, moveMs);
-        if (!bestMove.IsValid())
-            m_InternalState = EngineState::ERROR_COULDNT_FIND_MOVE;
-
-        return bestMove;
+        return m_Searcher.FindBest(m_State, m_History, moveMs);
     }
 
     void Board::MakeMove(LongAlgebraicMove lan)
     {
         JUPITER_TRACE();
+        JUPITER_PROFILE();
 
         Move move = Move::FromLAN(lan, m_State.pieces);
-        if (!move.IsValid()) {
-            m_InternalState = EngineState::ERROR_MALFORMED_LAN_STRING;
-            return;
-        }
+        if (!move.IsValid())
+            throw JupiterException(std::string("Malformed LAN string: ") + lan.chars);
 
         m_Searcher.MakeMove(m_State, move);
         m_History.Push(m_State);
 
         if (m_State.turn == Color::WHITE)
             m_FullMoves++;
-
-        m_InternalState = EngineState::OK;
     }
 
-    bool Board::HasError()
+    void Board::GetTelemetry(std::string& result)
     {
         JUPITER_TRACE();
+        JUPITER_PROFILE();
 
-        return m_InternalState >= EngineState::ERROR;
+        std::ostringstream ss;
+
+        ss << "{"
+            << "\"depth\":" << (int) m_Searcher.searchDepth << ","
+            << "\"nodesSearched\":" << m_Searcher.nodesSearched << ","
+            << "\"nodesLookedUp\":" << m_Searcher.nodesLookedUp << ","
+            << "\"nodesQuiesced\":" << m_Searcher.nodesQuiesced << ","
+            << "\"searchTime\":" << m_Searcher.searchTime 
+            << "}";
+
+        result = ss.str();
     }
 
-    const char *Board::GetError()
+    void Board::GetMetrics(std::string& result)
     {
         JUPITER_TRACE();
+        JUPITER_PROFILE();
 
-        switch (m_InternalState) {
-            case EngineState::ERROR_MALFORMED_FEN_STRING:
-                return "Malformed FEN string";
-            case EngineState::ERROR_BAD_FEN_POSITIONS:
-                return "Bad piece positions in FEN string";
-            case EngineState::ERROR_BAD_FEN_ACTIVE_COLOR:
-                return "Bad active color in FEN string";
-            case EngineState::ERROR_BAD_FEN_CASTLING_RIGHTS:
-                return "Bad castling rights in FEN string";
-            case EngineState::ERROR_BAD_FEN_EN_PASSANT_SQUARE:
-                return "Bad en passant square in FEN string";
-            case EngineState::ERROR_BAD_FEN_HALF_MOVE_COUNTER:
-                return "Bad half-move counter in FEN string";
-            case EngineState::ERROR_BAD_FEN_FULL_MOVE_COUNTER:
-                return "Bad full-move counter in FEN string";
-            case EngineState::ERROR_MALFORMED_LAN_STRING:
-                return "Malformed LAN string";
-            case EngineState::ERROR_COULDNT_FIND_MOVE:
-                return "Couldn't find move";
-            default:
-                return nullptr;
-        }
+        std::ostringstream ss;
+
+        ss << "{"
+            << "\"ttSize\":" << m_Searcher.ttSize << ","
+            << "\"bookMoves\":" << (int) m_Searcher.bookMoves
+            << "}";
+
+        result = ss.str();
     }
 
     void Board::Show(std::string& result)
     {
         JUPITER_TRACE();
+        JUPITER_PROFILE();
 
         std::ostringstream ss;
         ss << "Move " << m_FullMoves << std::endl
@@ -286,8 +266,8 @@ namespace libjupiter {
     void Board::Clear()
     {
         JUPITER_TRACE();
+        JUPITER_PROFILE();
 
-        m_InternalState = EngineState::OK;
         m_State.pieces = BitboardSet{};
         m_State.rights = CastlingRights{};
         m_State.turn = Color::WHITE;
@@ -299,6 +279,7 @@ namespace libjupiter {
     bool Board::SplitFEN(const char *fen, uint64_t length, FenView (&views)[13]) 
     {
         JUPITER_TRACE();
+        JUPITER_PROFILE();
 
         // Verify that the string is well formed
         uint64_t spaceCounter = 0;
@@ -323,12 +304,14 @@ namespace libjupiter {
                 case '0'...'9':
                     break;
                 default:
-                    std::cout << "invalid character: " << c << std::endl;
+                    ERROR("Invalid character: " << c);
                     return false;
             }
         }
-        if (spaceCounter != 5 || slashCounter != 7)
+        if (spaceCounter != 5 || slashCounter != 7) {
+            ERROR("Invalid space or slash count: " << spaceCounter << " spaces (expected 5), " << slashCounter << " slashes (expected 7)");
             return false;
+        }
 
         // Split at delimiting characters (spaces and forward slashes)
         uint64_t viewCounter = 0;
@@ -340,8 +323,10 @@ namespace libjupiter {
             }
         }
         views[viewCounter++] = { start, length };
-        if (viewCounter != 13)
+        if (viewCounter != 13) {
+            ERROR("Invalid block count: " << viewCounter << " (expected 13)");
             return false;
+        }
 
         return true;
     }

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "boardState.h"
 #include "core.h"
 #include <cstdint>
 
@@ -9,10 +8,10 @@ struct PieceSquareTable {
     int64_t endgameTable[64];
 };
 
-class PieceSquareTableManager {
+class PieceSquareTables {
 public:
-    PieceSquareTableManager();
-    int64_t Get(Color::Value color, Piece::Value piece, uint8_t index, uint8_t phase);
+    PieceSquareTables();
+    int64_t Get(Color::Value color, Piece::Value piece, uint8_t index, uint8_t phase) const;
 
 private:
     PieceSquareTable m_Tables[Piece::MAX_ENUM];

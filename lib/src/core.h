@@ -3,25 +3,10 @@
 #include "exception.h"
 #include <cstdint>
 #include <cstdlib>
+#include <string>
 
 uint8_t ToIndex(uint8_t x, uint8_t y);
 uint8_t Difference(uint8_t a, uint8_t b);
-
-struct EngineState {
-    typedef enum : uint8_t {
-        OK,
-        ERROR,
-        ERROR_MALFORMED_FEN_STRING,
-        ERROR_BAD_FEN_POSITIONS,
-        ERROR_BAD_FEN_ACTIVE_COLOR,
-        ERROR_BAD_FEN_CASTLING_RIGHTS,
-        ERROR_BAD_FEN_EN_PASSANT_SQUARE,
-        ERROR_BAD_FEN_HALF_MOVE_COUNTER,
-        ERROR_BAD_FEN_FULL_MOVE_COUNTER,
-        ERROR_MALFORMED_LAN_STRING,
-        ERROR_COULDNT_FIND_MOVE
-    } Value;
-};
 
 struct Color {
     typedef enum : uint8_t {
@@ -37,7 +22,15 @@ struct Color {
         switch (value) {
             case Value::WHITE: return Value::BLACK;
             case Value::BLACK: return Value::WHITE;
-            default: throw Exception("Getting opposite of invalid colour.");
+            default: throw JupiterException(std::string("Getting opposite of invalid colour: ") + Color::Show(value));
+        }
+    }
+    static const char *Show(Value value)
+    {
+        switch (value) {
+            case WHITE: return "White";
+            case BLACK: return "Black";
+            default: return "None";
         }
     }
 };
@@ -76,7 +69,7 @@ struct Piece {
             case ROOK: return 500;
             case QUEEN: return 975;
             case KING: return 0;
-            default: throw Exception("Evaluating invalid piece.");
+            default: throw JupiterException(std::string("Evaluating invalid piece: ") + Piece::Show(value));
         }
     }
 };
@@ -94,7 +87,7 @@ struct CastlingRight {
         switch (color) {
             case Color::WHITE: return KINGSIDE_WHITE;
             case Color::BLACK: return KINGSIDE_BLACK;
-            default: throw Exception("Getting kingside castling right for invalid colour.");
+            default: throw JupiterException(std::string("Getting kingside castling right for invalid colour: ") + Color::Show(color));
         }
     }
     static Value Queenside(Color::Value color)
@@ -102,7 +95,7 @@ struct CastlingRight {
         switch (color) {
             case Color::WHITE: return QUEENSIDE_WHITE;
             case Color::BLACK: return QUEENSIDE_BLACK;
-            default: throw Exception("Getting queenside castling right for invalid colour.");
+            default: throw JupiterException(std::string("Getting queenside castling right for invalid colour: ") + Color::Show(color));
         }
     }
 };

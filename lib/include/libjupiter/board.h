@@ -14,19 +14,19 @@ namespace libjupiter {
     class Board {
     public:
         Board(const char *fen);
+        ~Board();
         void SetTimeControl(uint64_t seconds, uint64_t increment);
         Move Go(uint64_t moveMs);
         void MakeMove(LongAlgebraicMove lan);
-        bool HasError();
-        const char *GetError();
         void Show(std::string& result);
+        void GetTelemetry(std::string& result);
+        void GetMetrics(std::string& result);
 
     private:
         void Clear();
         bool SplitFEN(const char *fen, uint64_t length, FenView (&views)[13]);
 
     private:
-        EngineState::Value m_InternalState{EngineState::OK};
         Zobrist m_Zobrist;
         OpeningBook m_OpeningBook;
         History m_History;

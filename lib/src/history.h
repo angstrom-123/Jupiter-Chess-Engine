@@ -1,18 +1,15 @@
 #pragma once
 
 #include "zobrist.h"
-#include "buffer.h"
+#include <vector>
 
 class History {
 public:
-    History(Zobrist& zobrist)
-        : m_Zobrist{zobrist} {}
-
+    History();
     bool IsRepetition();
     void Push(const BoardState& state);
     void Pop();
 
 private:
-    Buffer<ZobristKey, 512> m_History;
-    Zobrist& m_Zobrist;
+    std::vector<ZobristKey> m_History;
 };

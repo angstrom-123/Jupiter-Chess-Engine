@@ -1,11 +1,22 @@
 #include "history.h"
+#include "instrumenter.h"
+#include "boardState.h"
+
+History::History()
+{
+    m_History.reserve(512);
+}
 
 bool History::IsRepetition()
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
-    ZobristKey current = m_History[m_History.Size() - 1];
-    for (int64_t i = m_History.Size() - 2; i >= 0; i--) {
+    if (m_History.size() <= 2)
+        return false;
+
+    ZobristKey current = m_History[m_History.size() - 1];
+    for (int64_t i = m_History.size() - 2; i >= 0; i--) {
         if (m_History[i] == current)
             return true;
     }
@@ -16,12 +27,12 @@ void History::Push(const BoardState& state)
 {
     JUPITER_TRACE();
 
-    m_History.PushBack(m_Zobrist.ComputeKey(std::forward<const BoardState>(state)));
+    m_History.push_back(state.zobristKey);
 }
 
 void History::Pop()
 {
     JUPITER_TRACE();
 
-    m_History.PopBack();
+    m_History.pop_back();
 }

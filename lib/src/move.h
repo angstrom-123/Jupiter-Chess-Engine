@@ -2,6 +2,7 @@
 
 #include "bitboard.h"
 #include "core.h"
+#include "zobrist.h"
 
 union LongAlgebraicMove {
     struct {
@@ -28,4 +29,15 @@ struct Move {
     bool IsValid() const { return Piece::IsValid(piece); }
     static Move Invalid() { return Move(); }
     static Move FromLAN(LongAlgebraicMove lan, const BitboardSet& piecePositions);
+};
+
+struct MoveData {
+    ZobristKey zobristKey;
+    Move move{Move::Invalid()};
+    Piece::Value capture{Piece::Invalid()};
+    CastlingRights rights{0};
+    Color::Value turn{Color::Invalid()};
+    uint8_t enPassantIndex{0};
+    uint8_t fiftyMoveCounter{0};
+    uint16_t halfMoves{0};
 };

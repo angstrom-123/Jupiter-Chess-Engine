@@ -15,12 +15,16 @@ public:
     bool Has(Color::Value color, Piece::Value piece, uint8_t index) const;
     bool Has(Color::Value color, uint8_t index) const;
     bool Has(uint8_t index) const;
+    bool HasAny(const std::initializer_list<std::size_t>& indices) const;
     uint8_t Count(Color::Value color, Piece::Value piece) const;
     Piece::Value PieceInSquare(Color::Value color, uint8_t index) const;
     std::pair<Color::Value, Piece::Value> PieceInSquare(uint8_t index) const;
     Bitboard OccupancyMask(Color::Value color, Piece::Value piece) const;
     Bitboard OccupancyMask(Color::Value color) const;
     Bitboard OccupancyMask() const;
+    void Show() const;
+    void Dump() const;
+    void Validate() const;
 
 private:
     uint64_t m_Bits[Color::MAX_ENUM][Piece::MAX_ENUM]{{0}};

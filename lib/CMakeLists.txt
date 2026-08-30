@@ -8,17 +8,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Don't use set because apparently apple doesn't like it
 string(APPEND CMAKE_CXX_FLAGS " -Wall -Wextra")
-string(APPEND CMAKE_CXX_FLAGS_DEBUG " -g")
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " -O3")
+string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O3 -g -DDEBUG")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " -O3 -DNOTRACE")
+string(APPEND CMAKE_CXX_FLAGS_PROFILE " -O3 -DPROFILE -DNOTRACE")
 
 find_package(Python3 COMPONENTS Development REQUIRED)
 
 set(SOURCES
+    src/core.cpp 
     src/bitboard.cpp 
     src/board.cpp 
     src/move.cpp
-    src/core.cpp 
     src/openingBook.cpp
+    src/executionTimer.cpp
     src/searcher.cpp
     src/evaluator.cpp
     src/attackTable.cpp
@@ -76,9 +78,11 @@ if(NOT EXISTS "${PACKAGE_DIR}/__init__.pyi")
     def __init__(self, fen: str | None = None) -> None: ...
     def has_error(self) -> bool: ...
     def get_error(self) -> str: ...
-    def go(self, moveMs: int) -> str: ...
+    def go(self, moveMs: int) -> str | None: ...
     def make_move(self, move: str) -> None: ...
-    def set_time_control(self, seconds: int, increment: int) -> None: ...")
+    def set_time_control(self, seconds: int, increment: int) -> None: ...
+    def get_telemetry(self) -> str: ...
+    def get_metrics(self) -> str: ...")
 endif()
 
 message(STATUS "Python module will be built as: $<TARGET_FILE_NAME:jupiter>")

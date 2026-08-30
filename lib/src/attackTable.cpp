@@ -1,12 +1,16 @@
 #include "attackTable.h"
 
 #include <algorithm>
+#include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <bit>
 #include <array>
+#include "exception.h"
+#include "instrumenter.h"
+#include "rng.h"
 
 const std::array<int8_t[2], 2> PAWN_ATTACKS = {{ { 1, 1 }, { -1, 1 } }}; // Subject to direction
 const std::array<int8_t[2], 8> KNIGHT_ATTACKS = {{ { 1, 2 }, { 2, 1 }, { 2, -1 }, { 1, -2 }, { -1, -2 }, { -2, -1 }, { -2, 1 }, { -1, 2 } }};
@@ -62,7 +66,7 @@ Bitboard AttackTable::GetAttacks(uint8_t index, Piece::Value piece, Color::Value
         case Piece::KING:
             return m_KingTables[index];
         default:
-            return UINT64_MAX;
+            throw JupiterException(std::string("Getting attacks for invalid piece: ") + Piece::Show(piece));
     }
 }
 
@@ -161,7 +165,9 @@ void AttackTable::GenerateSliderTables()
         m_MagicsLoadedFromFile = true;
     }
 
-    XorShift64 rng(123456789);
+    uint64_t seed[4] = { 0, 1, 2, 3 };
+    RomuQuadRandom rng(seed);
+    rng.Warm();
     for (uint8_t i = 0; i < 64; i++) {
         // Rook
         {
@@ -256,7 +262,7 @@ Bitboard AttackTable::GenerateSliderAttacks(uint8_t index, Bitboard occupancy, c
     return mask;
 }
 
-Bitboard AttackTable::FindMagic(uint8_t index, XorShift64& rng, Piece::Value piece, uint64_t maxAttempts)
+Bitboard AttackTable::FindMagic(uint8_t index, RomuQuadRandom& rng, Piece::Value piece, uint64_t maxAttempts)
 {
     JUPITER_TRACE();
 
@@ -265,7 +271,7 @@ Bitboard AttackTable::FindMagic(uint8_t index, XorShift64& rng, Piece::Value pie
     auto SparseRandom = [&rng]() {
         uint64_t random;
         do {
-            random = rng.Next() & rng.Next() & rng.Next();
+            random = rng.Generate() & rng.Generate() & rng.Generate();
         } while (std::popcount(random) < 6);
         return random;
     };
@@ -288,8 +294,8 @@ Bitboard AttackTable::FindMagic(uint8_t index, XorShift64& rng, Piece::Value pie
         for (const auto occupancy : occupancies) {
             uint16_t magicIndex = static_cast<uint16_t>((occupancy * magic) >> (64 - bitCount));
             Bitboard attacks = (piece == Piece::ROOK) 
-                    ? GenerateSliderAttacks(index, occupancy, ROOK_ATTACKS)
-                    : GenerateSliderAttacks(index, occupancy, BISHOP_ATTACKS);
+                ? GenerateSliderAttacks(index, occupancy, ROOK_ATTACKS)
+                : GenerateSliderAttacks(index, occupancy, BISHOP_ATTACKS);
 
             if (usedAttacks[magicIndex] == 0)
                 usedAttacks[magicIndex] = attacks;
@@ -298,8 +304,8 @@ Bitboard AttackTable::FindMagic(uint8_t index, XorShift64& rng, Piece::Value pie
         }
         return magic;
 
-failed:
-        continue;
+        failed:
+            continue;
     }
 
     return 0;

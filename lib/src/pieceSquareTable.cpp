@@ -1,8 +1,10 @@
 #include "pieceSquareTable.h"
+#include "instrumenter.h"
 
-PieceSquareTableManager::PieceSquareTableManager()
+PieceSquareTables::PieceSquareTables()
 {
     JUPITER_TRACE();
+    JUPITER_PROFILE();
 
     // Rofchade PST 
     // Taken from a chess forum post.
@@ -146,7 +148,7 @@ PieceSquareTableManager::PieceSquareTableManager()
     };
 }
 
-int64_t PieceSquareTableManager::Get(Color::Value color, Piece::Value piece, uint8_t index, uint8_t phase)
+int64_t PieceSquareTables::Get(Color::Value color, Piece::Value piece, uint8_t index, uint8_t phase) const
 {
     JUPITER_TRACE();
 

@@ -1,6 +1,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <iostream>
 
 #include <Python.h>
@@ -8,9 +9,10 @@
 #include <pytypedefs.h>
 #include <unicodeobject.h>
 
+#include "instrumenter.h"
 #include "libjupiter/board.h"
 #include "move.h"
-#include "stackTrace.h"
+#include "object.h"
 
 // Wrappers
 
@@ -18,9 +20,9 @@ void SegfaultHandler(int signal)
 {
     JUPITER_TRACE();
 
-    std::cerr << "\n=== FATAL (" << signal << ") ===\n";
+    ERROR("\n=== FATAL (" << signal << ") ===");
     StackTracer::PrintTrace();
-    std::abort();
+    std::terminate();
 }
 
 namespace py {
@@ -71,25 +73,26 @@ namespace py {
         return PyUnicode_FromString(result.c_str());
     }
 
-    static PyObject *BoardHasError(Board *self, PyObject *)
+    static PyObject *BoardGetMetrics(Board *self, PyObject *)
     {
         JUPITER_TRACE();
 
         if (!self->board)
             return nullptr;
-        return PyBool_FromLong(self->board->HasError());
+        std::string result;
+        self->board->GetMetrics(result);
+        return PyUnicode_FromString(result.c_str());
     }
 
-    static PyObject *BoardGetError(Board *self, PyObject *)
+    static PyObject *BoardGetTelemetry(Board *self, PyObject *)
     {
         JUPITER_TRACE();
 
         if (!self->board)
             return nullptr;
-        const char *error = self->board->GetError();
-        if (error)
-            return PyUnicode_FromString(self->board->GetError());
-        Py_RETURN_NONE;
+        std::string result;
+        self->board->GetTelemetry(result);
+        return PyUnicode_FromString(result.c_str());
     }
 
     static PyObject *BoardGo(Board *self, PyObject *args)
@@ -102,7 +105,16 @@ namespace py {
         if (!PyArg_ParseTuple(args, "K", &ms))
             return nullptr;
         Move move = self->board->Go(ms);
-        return PyUnicode_FromString(move.ToLAN().chars);
+        if (move.IsValid()) {
+            const LongAlgebraicMove lan = move.ToLAN();
+
+            char safeChars[8] = { '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0' };
+            for (std::size_t i = 0; i < 5; i++)
+                safeChars[i] = lan.chars[i];
+
+            return PyUnicode_FromString(safeChars);
+        }
+        Py_RETURN_NONE;
     }
 
     static PyObject *BoardMakeMove(Board *self, PyObject *args)
@@ -140,17 +152,17 @@ namespace py {
     // Board Method Table
 
     static PyMethodDef boardMethods[] = {
-        { "has_error", reinterpret_cast<PyCFunction>(py::BoardHasError), METH_NOARGS, "Check if the board has an error." },
-        { "get_error", reinterpret_cast<PyCFunction>(py::BoardGetError), METH_NOARGS, "Gets the current error if there is one." },
         { "go", reinterpret_cast<PyCFunction>(py::BoardGo), METH_VARARGS, "Find the best move on the current board within the given time." },
         { "make_move", reinterpret_cast<PyCFunction>(py::BoardMakeMove), METH_VARARGS, "Apply a move in Long Algebraic Notation to update game state." },
         { "set_time_control", reinterpret_cast<PyCFunction>(py::BoardSetTimeControl), METH_VARARGS, "Set the time control for the engine to use." },
+        { "get_telemetry", reinterpret_cast<PyCFunction>(py::BoardGetTelemetry), METH_NOARGS, "Get internal engine telemetry as stringified JSON." },
+        { "get_metrics", reinterpret_cast<PyCFunction>(py::BoardGetMetrics), METH_NOARGS, "Get internal engine metrics as stringified JSON." },
         { nullptr, nullptr, 0, nullptr }
     };
 
     // Board Type Definition
 
-    static PyTypeObject boardType{
+    static PyTypeObject boardType = {
         .ob_base = PyVarObject_HEAD_INIT(nullptr, 0)
         .tp_name = "libjupiter.Board",
         .tp_basicsize = sizeof(libjupiter::Board),
@@ -159,9 +171,10 @@ namespace py {
         .tp_repr = reinterpret_cast<reprfunc>(BoardRepr),
         .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
         .tp_doc = "Chess board class",
+        .tp_weaklistoffset = 0,
         .tp_methods = boardMethods,
         .tp_init = reinterpret_cast<initproc>(BoardInit),
-        .tp_new = BoardNew
+        .tp_new = BoardNew,
     };
 }
 
@@ -174,11 +187,11 @@ static PyMethodDef libjupiterMethods[] = {
 // Module Definition
 
 static PyModuleDef libjupiterModule = {
-    PyModuleDef_HEAD_INIT,
-    "libjupiter",
-    nullptr,
-    -1,
-    libjupiterMethods
+    .m_base = PyModuleDef_HEAD_INIT,
+    .m_name = "libjupiter",
+    .m_doc = nullptr,
+    .m_size = -1,
+    .m_methods = libjupiterMethods,
 };
 
 // Module Init
