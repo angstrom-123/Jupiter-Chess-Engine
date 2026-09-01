@@ -16,6 +16,8 @@ class Jupiter(BaseEngine):
     def init(self, tc: TimeControl, fen: str | None = None) -> None:
         self.board = Board() if fen is None else Board(fen)
         self.board.set_time_control(tc.seconds, tc.increment)
+        self.n_searches = 0 
+        self.telemetry = {}
 
     @override
     def go(self, ms_left: int) -> str | None:

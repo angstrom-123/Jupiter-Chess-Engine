@@ -58,7 +58,7 @@ int64_t Evaluator::PiecePositions(const BoardState& state) const
     Color::Value friendly = state.turn;
     Color::Value enemy = Color::Opposite(state.turn);
 
-    uint8_t phase = GamePhase(std::forward<const BoardState>(state));
+    float phase = GamePhase(std::forward<const BoardState>(state));
 
     for (uint8_t i = Piece::PAWN; i < Piece::MAX_ENUM; i++) {
         Piece::Value piece = static_cast<Piece::Value>(i);
@@ -92,39 +92,31 @@ int64_t Evaluator::Mobility(const BoardState& state, const AttackTable& table) c
     // return (attackCount + quietCount) * MOVE_SCORE;
 }
 
-// 0-100, higher = more likely to be endgame
-uint8_t Evaluator::GamePhase(const BoardState& state) const
+// 0.0 - 1.0 (midgame - endgame)
+float Evaluator::GamePhase(const BoardState& state) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    uint8_t score = 0;
+    Color::Value friendly = state.turn;
+    Color::Value enemy = Color::Opposite(state.turn);
 
-    constexpr float MINOR_PIECE_WEIGHT = 30.0;
-    constexpr float MAJOR_PIECE_WEIGHT = 40.0;
-    constexpr float PAWN_WEIGHT = 10.0;
-    constexpr float MOVE_WEIGHT = 20.0;
+    constexpr int64_t QUEEN_PHASE = 4;
+    constexpr int64_t ROOK_PHASE = 2;
+    constexpr int64_t BISHOP_PHASE = 1;
+    constexpr int64_t KNIGHT_PHASE = 1;
 
-    static_assert(MINOR_PIECE_WEIGHT + MAJOR_PIECE_WEIGHT + PAWN_WEIGHT + MOVE_WEIGHT == 100.0, "Weights must sum to 100.");
+    constexpr int64_t MAX_PHASE = (QUEEN_PHASE * 2) + (ROOK_PHASE * 4) + (BISHOP_PHASE * 4) + (KNIGHT_PHASE * 4);
 
-    // Minor piece counts
-    uint8_t nKnights = state.pieces.Count(Color::WHITE, Piece::KNIGHT) + state.pieces.Count(Color::BLACK, Piece::KNIGHT);
-    uint8_t nBishops = state.pieces.Count(Color::WHITE, Piece::BISHOP) + state.pieces.Count(Color::BLACK, Piece::BISHOP);
-    score += std::floor(MINOR_PIECE_WEIGHT / static_cast<float>(std::max(nKnights + nBishops, 1)));
+    int64_t nQueens = state.pieces.Count(friendly, Piece::QUEEN) - state.pieces.Count(enemy, Piece::QUEEN);
+    int64_t nRooks = state.pieces.Count(friendly, Piece::ROOK) - state.pieces.Count(enemy, Piece::ROOK);
+    int64_t nBishops = state.pieces.Count(friendly, Piece::BISHOP) - state.pieces.Count(enemy, Piece::BISHOP);
+    int64_t nKnights = state.pieces.Count(friendly, Piece::KNIGHT) - state.pieces.Count(enemy, Piece::KNIGHT);
 
-    // Major piece counts
-    uint8_t nRooks = state.pieces.Count(Color::WHITE, Piece::ROOK) + state.pieces.Count(Color::BLACK, Piece::ROOK);
-    uint8_t nQueens = state.pieces.Count(Color::WHITE, Piece::QUEEN) + state.pieces.Count(Color::BLACK, Piece::QUEEN);
-    score += std::floor(MAJOR_PIECE_WEIGHT / static_cast<float>(std::max(nRooks + nQueens, 1)));
+    int64_t currentPhase = (QUEEN_PHASE * nQueens) + (ROOK_PHASE * nRooks) + (BISHOP_PHASE * nBishops) + (KNIGHT_PHASE * nKnights);
+    currentPhase = std::min(currentPhase, MAX_PHASE); // Clamp in case of promotions
 
-    // Pawn counts
-    uint8_t nPawns = state.pieces.Count(Color::WHITE, Piece::PAWN) + state.pieces.Count(Color::BLACK, Piece::PAWN);
-    score += std::floor(PAWN_WEIGHT / static_cast<float>(std::max(nPawns, static_cast<uint8_t>(1))));
-
-    // Move number
-    score += std::floor(MOVE_WEIGHT / static_cast<float>(std::max(state.halfMoves / 2, 1)));
-
-    return score;
+    return 1.0 - (static_cast<float>(currentPhase) / static_cast<float>(MAX_PHASE));
 }
 
 int64_t Evaluator::SEE(const BoardState& state, Move move) const

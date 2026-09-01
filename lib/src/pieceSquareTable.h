@@ -11,7 +11,7 @@ struct PieceSquareTable {
 class PieceSquareTables {
 public:
     PieceSquareTables();
-    int64_t Get(Color::Value color, Piece::Value piece, uint8_t index, uint8_t phase) const;
+    int64_t Get(Color::Value color, Piece::Value piece, uint8_t index, float phase) const;
 
 private:
     PieceSquareTable m_Tables[Piece::MAX_ENUM];

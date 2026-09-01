@@ -1,5 +1,6 @@
 #include "openingBook.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -8,6 +9,8 @@
 
 namespace fs = std::filesystem;
 
+// TODO: Tune the weight factor so that we play from book, but avoid the really bad moves still
+const float WEIGHT_FACTOR = 0.7; // Only allow moves within 30% of best move in whole book
 const uint64_t POLYGLOT_ENTRY_SIZE = 16;
 const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path() / "assets" / "book.bin";
 const uint64_t randoms[781] = {
@@ -210,7 +213,7 @@ const uint64_t randoms[781] = {
 };
 
 #define READ_U64(bytes, offset) \
-        ((static_cast<uint64_t>(bytes[(offset)]) << 56ul) \
+        static_cast<uint64_t>((static_cast<uint64_t>(bytes[(offset)]) << 56ul) \
         | (static_cast<uint64_t>(bytes[(offset) + 1]) << 48ul) \
         | (static_cast<uint64_t>(bytes[(offset) + 2]) << 40ul) \
         | (static_cast<uint64_t>(bytes[(offset) + 3]) << 32ul) \
@@ -218,6 +221,10 @@ const uint64_t randoms[781] = {
         | (static_cast<uint64_t>(bytes[(offset) + 5]) << 16ul) \
         | (static_cast<uint64_t>(bytes[(offset) + 6]) << 8ul) \
         | static_cast<uint64_t>(bytes[(offset) + 7]))
+
+#define READ_U16(bytes, offset) \
+        static_cast<uint16_t>((static_cast<uint64_t>(bytes[(offset) + 1]) << 8ul) \
+        | static_cast<uint64_t>(bytes[(offset)]))
 
 OpeningBook::OpeningBook()
 {
@@ -235,6 +242,13 @@ OpeningBook::OpeningBook()
     const std::size_t fiftyMiB = 50ul * 1024ul * 1024ul * 1024ul;
     if (m_FileSizeBytes > fiftyMiB)
         WARN("Opening book is large (" << m_FileSizeBytes / (1024 * 1024 * 1024) << "MiB)");
+
+    // Find the highest weight move to use as reference to filter out poor moves later
+    for (std::size_t i = 0; i < m_FileSizeBytes / POLYGLOT_ENTRY_SIZE; i++) {
+        uint64_t offset = i * POLYGLOT_ENTRY_SIZE;
+        uint16_t weight = READ_U16(m_Bytes, offset + 10);
+        m_BestWeight = std::max(m_BestWeight, weight);
+    }
 }
 
 bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves)
@@ -283,7 +297,10 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves)
         if (READ_U64(m_Bytes, offset) != targetKey)
             break; // Reached the end of the block
 
-        moves.PushBack(ParseMove(std::forward<const BoardState>(state), READ_U64(m_Bytes, offset + 8)));
+        // Read back the move weight first and discard if too low
+        uint16_t weight = READ_U16(m_Bytes, offset + 10);
+        if (weight >= (m_BestWeight * WEIGHT_FACTOR))
+            moves.PushBack(ParseMove(std::forward<const BoardState>(state), READ_U64(m_Bytes, offset + 8)));
         firstIndex++;
     }
 

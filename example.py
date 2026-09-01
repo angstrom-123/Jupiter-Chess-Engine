@@ -4,7 +4,9 @@ import json
 
 from lib.build.libjupiter import Board
 
-board: Board = Board("k7/5ppp/8/1r6/8/8/K7/8 b - - 0 1")
+board: Board = Board("k7/8/8/4K3/8/8/8/7q b - - 0 1")
+
+print(repr(board))
 
 telemetry: dict = {}
 n_searches: int = 0

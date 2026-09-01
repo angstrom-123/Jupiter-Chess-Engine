@@ -14,7 +14,7 @@ public:
     Evaluator(const AttackTable& attackTable)
         : m_AttackTable{std::forward<const AttackTable>(attackTable)} {}
     int64_t Evaluate(const BoardState& state) const;
-    uint8_t GamePhase(const BoardState& state) const;
+    float GamePhase(const BoardState& state) const;
     int64_t SEE(const BoardState& state, Move move) const;
 
 private:

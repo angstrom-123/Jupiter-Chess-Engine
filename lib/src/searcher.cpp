@@ -198,7 +198,7 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
 
     // Checkmate or stalemate
     if (!bestMove.IsValid())
-        return IsCheckmate(state) ? -MATE_EVAL + ply : 0;
+        bestScore = IsCheckmate(state) ? -MATE_EVAL + ply : 0;
 
     // Save search results to TT
     NodeType::Value nodeType = NodeType::EXACT;
@@ -232,8 +232,9 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
     nodesQuiesced++;
     nodesSearched++;
 
-    // Standing Pat
-    int64_t bestScore = m_Eval.Evaluate(state);
+    // Standing Pat is only an option when not in check
+    bool inCheck = SquareUnderAttack(state, state.pieces.OccupancyMask(state.turn, Piece::KING), Color::Opposite(state.turn));
+    int64_t bestScore = (inCheck) ? -INT64_MAX : m_Eval.Evaluate(state);
 
     // Update search terms
     if (bestScore > alpha)
@@ -242,53 +243,21 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
     if (alpha >= beta)
         return bestScore;
 
-    // TODO
-    // Transposition Lookup
-    Move ttMove = Move::Invalid();
-    TableEntry entry = m_TranspositionTable.Get(state.zobristKey);
-    if (entry.IsValid()) {
-        nodesLookedUp++;
-        ttMove = entry.bestMove;
-
-        int64_t score = entry.score;
-        if (entry.score > MATE_THRESHOLD)
-            score -= ply;
-        else if (entry.score < -MATE_THRESHOLD)
-            score += ply;
-
-        switch (entry.nodeType) {
-            case NodeType::EXACT:
-                return score;
-            case NodeType::LOWER_BOUND:
-                alpha = std::max(alpha, score);
-                break;
-            case NodeType::UPPER_BOUND:
-                beta = std::min(beta, score);
-                break;
-        }
-
-        // Fail soft here is really important, stops shuffling around when mate is possible
-        if (alpha >= beta)
-            return score;
-    }
-
-    const uint8_t phase = m_Eval.GamePhase(std::forward<const BoardState>(state));
-
+    bool hasLegalMove = false;
     Move move;
-    Movegen movegen = Movegen(state, m_AttackTable, ttMove);
-    while ((move = movegen.Stream(m_Eval, true)).IsValid()) {
-        // Delta pruning
-        if (phase < 80) { // Don't prune in late game
-            const int64_t DELTA_MARGIN = 200;
-            if (!Piece::IsValid(move.promote)) { // Don't prune promotions
-                Piece::Value capture = state.pieces.PieceInSquare(Color::Opposite(state.turn), move.to);
-                if (!Piece::IsValid(capture)) // en passant
-                    capture = Piece::PAWN;
+    Movegen movegen = Movegen(state, m_AttackTable);
+    // Consider quiet moves if in check
+    while ((move = movegen.Stream(m_Eval, !inCheck)).IsValid()) {
+        // Delta pruning (only non-promotions when not in check)
+        if (!inCheck && !Piece::IsValid(move.promote)) {
+            const int64_t DELTA_MARGIN = Piece::Evaluate(Piece::KNIGHT); // TODO: Probably want this value to be slightly higher?
+            Piece::Value capture = state.pieces.PieceInSquare(Color::Opposite(state.turn), move.to);
+            if (!Piece::IsValid(capture)) // en passant
+                capture = Piece::PAWN;
 
-                // If the capture doesn't raise alpha then skip the move
-                if (bestScore + Piece::Evaluate(capture) + DELTA_MARGIN < alpha)
-                    continue;
-            }
+            // If the capture doesn't raise alpha then skip the move
+            if (bestScore + Piece::Evaluate(capture) + DELTA_MARGIN < alpha)
+                continue;
         }
 
         // Make move and check legality
@@ -297,6 +266,8 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
             UnmakeMove(state, moveData);
             continue;
         }
+
+        hasLegalMove = true;
 
         // Update state and search
         history.Push(state);
@@ -322,6 +293,10 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
         if (score >= beta)
             break;
     }
+
+    // Could be in checkmate
+    if (inCheck && !hasLegalMove)
+        return -MATE_EVAL + ply;
 
     return bestScore;
 }
@@ -507,11 +482,6 @@ void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t
     }
 }
 
-// TODO: I think checkmate ply calculations are backwards??
-//       Black was just not going for it?
-//       Check it for white too 
-//       Set up a test position temporarily
-
 // TODO: Search extensions
 uint64_t Searcher::CalculateSearchTime(const BoardState& state, uint64_t msRemaining)
 {
@@ -520,10 +490,10 @@ uint64_t Searcher::CalculateSearchTime(const BoardState& state, uint64_t msRemai
     float incrementMs = m_TimeControlIncrement * 1000.0;
     searchTime = msRemaining / 20.0 + incrementMs / 2.0;
 
-    // TODO: Estimate position complexity (just using game phase for now)
+    // TODO: Search extensions and stuff
     float c = 1.0;
-    int64_t phase = m_Eval.GamePhase(std::forward<const BoardState>(state));
-    if (phase > 15 && phase < 60)
+    float phase = m_Eval.GamePhase(std::forward<const BoardState>(state));
+    if (phase > 0.15 && phase < 0.60)  // TODO: Swap this for a better way
         c += 0.10;
 
     searchTime *= c;

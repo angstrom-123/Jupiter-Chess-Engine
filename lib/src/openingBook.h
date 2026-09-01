@@ -21,4 +21,5 @@ private:
 private: 
     std::vector<uint8_t> m_Bytes;
     std::size_t m_FileSizeBytes{0};
+    uint16_t m_BestWeight{0};
 };

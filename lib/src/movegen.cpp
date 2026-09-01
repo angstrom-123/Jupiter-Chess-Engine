@@ -1,9 +1,20 @@
 #include "movegen.h"
 #include "core.h"
 #include "instrumenter.h"
+#include <algorithm>
 #include <bit>
 
-Move Movegen::Stream(const Evaluator& evaluator, bool attackMode)
+static const uint8_t MVV_LVA_TABLE[Piece::MAX_ENUM + 1][Piece::MAX_ENUM + 1] = {
+    { 10, 11, 12, 13, 14, 15, 0 }, // victim P, attacker K, Q, R, B, N, P, None
+    { 20, 21, 22, 23, 24, 25, 0 }, // victim N, attacker K, Q, R, B, N, P, None
+    { 30, 31, 32, 33, 34, 35, 0 }, // victim B, attacker K, Q, R, B, N, P, None
+    { 40, 41, 42, 43, 44, 45, 0 }, // victim R, attacker K, Q, R, B, N, P, None
+    { 50, 51, 52, 53, 54, 55, 0 }, // victim Q, attacker K, Q, R, B, N, P, None
+    { 0, 0, 0, 0, 0, 0, 0 },       // victim K, attacker K, Q, R, B, N, P, None
+    { 0, 0, 0, 0, 0, 0, 0},        // victim _, attacker K, Q, R, B, N, P, None
+};
+
+Move Movegen::Stream(const Evaluator& evaluator, bool quiescenceMode)
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -11,29 +22,43 @@ Move Movegen::Stream(const Evaluator& evaluator, bool attackMode)
     switch (m_StreamState) {
         case StreamState::NONE:
             FindAttacks();
+            OrderAttacks();
             m_StreamState = StreamState::GOOD_ATTACKS;
+            // Check that the best move provided is actually pseudo-legal
+            if (m_BestMove.IsValid() && !std::ranges::contains(m_Attacks, m_BestMove)) {
+                FindQuiets();
+                if (!std::ranges::contains(m_Quiets, m_BestMove))
+                    m_BestMove = Move::Invalid();
+            }
             if (m_BestMove.IsValid())
                 return m_BestMove;
             // Fall through
         case StreamState::GOOD_ATTACKS:
             while (m_AttacksIndex < m_Attacks.Size()) {
                 const Move& move = m_Attacks[m_AttacksIndex++];
-                if (move != m_BestMove && evaluator.SEE(std::forward<const BoardState>(m_State), move) > 0)
-                    return move;
-                m_BadAttacks.PushBack(move);
+                if (move != m_BestMove) {
+                    if (evaluator.SEE(std::forward<const BoardState>(m_State), move) > 0)
+                        return move;
+
+                    m_BadAttacks.PushBack(move);
+                }
             }
-            if (!attackMode) {
+            // In quiescence mode, ignore quiets and bad attacks so just exit here
+            if (quiescenceMode) {
+                m_StreamState = StreamState::FINISHED;
+                return Move::Invalid();
+            }
+
+            // In case we already generated them when validating the best move
+            if (m_Quiets.Size() == 0)
                 FindQuiets();
-                m_StreamState = StreamState::QUIETS;
-            }
+            m_StreamState = StreamState::QUIETS;
             // Fall through
         case StreamState::QUIETS:
-            if (!attackMode) {
-                while (m_QuietsIndex < m_Quiets.Size()) {
-                    const Move move = m_Quiets[m_QuietsIndex++];
-                    if (move != m_BestMove)
-                        return move;
-                }
+            while (m_QuietsIndex < m_Quiets.Size()) {
+                const Move move = m_Quiets[m_QuietsIndex++];
+                if (move != m_BestMove)
+                    return move;
             }
             m_StreamState = StreamState::BAD_ATTACKS;
             m_AttacksIndex = 0;
@@ -51,24 +76,42 @@ Move Movegen::Stream(const Evaluator& evaluator, bool attackMode)
     }
 }
 
-const AttackMoveBuffer& Movegen::GetAttacks()
+std::size_t Movegen::AttackCount()
 {
     FindAttacks();
-    return m_Attacks;
+    return m_Attacks.Size();
 }
 
-const QuietMoveBuffer& Movegen::GetQuiets()
+std::size_t Movegen::QuietCount()
 {
     FindQuiets();
-    return m_Quiets;
+    return m_Quiets.Size();
+}
+
+// MVV LVA via table lookup
+void Movegen::OrderAttacks()
+{
+    std::sort(m_Attacks.begin(), m_Attacks.end(), [this](const Move& a, const Move& b) {
+        Piece::Value victimA = m_State.pieces.PieceInSquare(a.to).second;
+        if (!Piece::IsValid(victimA)) // In case of en passant
+            victimA = Piece::PAWN;
+        Piece::Value aggressorA = m_State.pieces.PieceInSquare(a.from).second;
+        uint8_t scoreA = MVV_LVA_TABLE[victimA][aggressorA];
+
+        Piece::Value victimB = m_State.pieces.PieceInSquare(b.to).second;
+        if (!Piece::IsValid(victimB)) // In case of en passant
+            victimB = Piece::PAWN;
+        Piece::Value aggressorB = m_State.pieces.PieceInSquare(b.from).second;
+        uint8_t scoreB = MVV_LVA_TABLE[victimB][aggressorB];
+
+        return scoreA > scoreB;
+    });
 }
 
 void Movegen::FindAttacks()
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
-
-    m_Attacks.Resize(0);
 
     // Queens
     {
@@ -146,8 +189,6 @@ void Movegen::FindQuiets()
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
-
-    m_Quiets.Resize(0);
 
     // Pawns
     {

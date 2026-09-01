@@ -148,12 +148,12 @@ PieceSquareTables::PieceSquareTables()
     };
 }
 
-int64_t PieceSquareTables::Get(Color::Value color, Piece::Value piece, uint8_t index, uint8_t phase) const
+int64_t PieceSquareTables::Get(Color::Value color, Piece::Value piece, uint8_t index, float phase) const
 {
     JUPITER_TRACE();
 
-    float endgameWeight = static_cast<float>(phase) / 100.0;
-    float midgameWeight = 1.0 - endgameWeight;
+    float endgameWeight = phase;
+    float midgameWeight = 1.0 - phase;
 
     // Invert table if black
     if (color == Color::BLACK)

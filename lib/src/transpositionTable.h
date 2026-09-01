@@ -38,26 +38,12 @@ struct TableEntry {
     static TableEntry Invalid() { return TableEntry{ .hash = 0 }; }
 };
 
-// This way we can search by 25-bit table index and combine it with the 39 stored bits to recreate the full key.
-// This allows complete comparison of position hashes while remaining packed withing 16 bytes.
-// 64 (2 nodetype, 5 depth, 18 bestmove) + 39 key
-struct PackedTableEntry {
-    uint64_t packed{0};
-    int64_t score{0};
-
-    PackedTableEntry() = default;
-    PackedTableEntry(ZobristKey hash, int64_t score, Move bestMove, uint8_t depth, NodeType::Value nodeType);
-    bool IsValid() const { return packed > 0; }
-    static PackedTableEntry Invalid() { return {}; }
-    TableEntry Unpack(uint64_t index) const;
-};
-
 class TranspositionTable {
 public:
     TranspositionTable();
     ~TranspositionTable();
 
-    std::size_t OccupancyBytes() { return m_Occupancy * sizeof(PackedTableEntry); }
+    std::size_t OccupancyBytes() { return m_Occupancy * sizeof(TableEntry); }
     TableEntry Get(ZobristKey key);
     void Save(const BoardState& state, int64_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType);
 
@@ -66,5 +52,5 @@ private:
 
 private:
     std::size_t m_Occupancy{0};
-    PackedTableEntry *m_Table{nullptr};
+    TableEntry *m_Table{nullptr};
 };

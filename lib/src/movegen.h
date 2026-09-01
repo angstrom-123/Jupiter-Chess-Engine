@@ -30,10 +30,11 @@ public:
     Movegen(const BoardState& state, const AttackTable& attackTable, Move bestMove = Move::Invalid())
         : m_State{std::forward<const BoardState>(state)}, m_AttackTable{std::forward<const AttackTable>(attackTable)}, m_BestMove{bestMove} {}
     Move Stream(const Evaluator& evaluator, bool attackMode = false);
-    const AttackMoveBuffer& GetAttacks();
-    const QuietMoveBuffer& GetQuiets();
+    std::size_t AttackCount();
+    std::size_t QuietCount();
 
 private:
+    void OrderAttacks();
     void FindAttacks();
     void FindQuiets();
     void FindPawnAttacks(uint8_t index);
