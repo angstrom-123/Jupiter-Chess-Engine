@@ -4,7 +4,7 @@ import json
 
 from lib.build.libjupiter import Board
 
-board: Board = Board("k7/8/8/4K3/8/8/8/7q b - - 0 1")
+board: Board = Board("kb/8/8/4KR2/8/8/8/8 w - - 0 1")
 
 print(repr(board))
 

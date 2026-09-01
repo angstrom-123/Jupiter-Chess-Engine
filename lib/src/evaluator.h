@@ -2,6 +2,7 @@
 
 #include "attackTable.h"
 #include "boardState.h"
+#include "distanceTable.h"
 #include "move.h"
 #include "pieceSquareTable.h"
 #include <cstdint>
@@ -19,10 +20,13 @@ public:
 
 private:
     int64_t MaterialBalance(const BoardState& state) const;
-    int64_t PiecePositions(const BoardState& state) const;
-    int64_t Mobility(const BoardState& state, const AttackTable& table) const;
+    int64_t PiecePositions(const BoardState& state, float phase) const;
+    int64_t Mopup(const BoardState& state, int64_t materialBalance, float phase) const;
+    int64_t CastlingRights(const BoardState& state) const;
+    int64_t Mobility(const BoardState& state) const;
 
 private:
     AttackTable m_AttackTable;
+    DistanceTable m_DistanceTable{DistanceTable()};
     PieceSquareTables m_PieceSquareTables{PieceSquareTables()};
 };

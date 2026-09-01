@@ -10,7 +10,7 @@
 namespace fs = std::filesystem;
 
 // TODO: Tune the weight factor so that we play from book, but avoid the really bad moves still
-const float WEIGHT_FACTOR = 0.7; // Only allow moves within 30% of best move in whole book
+const float WEIGHT_FACTOR = 0.85; // Only allow moves within 15% of best move in whole book
 const uint64_t POLYGLOT_ENTRY_SIZE = 16;
 const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path() / "assets" / "book.bin";
 const uint64_t randoms[781] = {
@@ -299,8 +299,16 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves)
 
         // Read back the move weight first and discard if too low
         uint16_t weight = READ_U16(m_Bytes, offset + 10);
-        if (weight >= (m_BestWeight * WEIGHT_FACTOR))
-            moves.PushBack(ParseMove(std::forward<const BoardState>(state), READ_U64(m_Bytes, offset + 8)));
+        if (weight >= (m_BestWeight * WEIGHT_FACTOR)) {
+            auto parsed = ParseMove(std::forward<const BoardState>(state), READ_U64(m_Bytes, offset + 8));
+            Move move = parsed.first;
+
+            // Discard any king moves except for castling because they are almost always bad
+            if (move.piece == Piece::KING && Difference(move.from, move.to) != 2)
+                continue;
+
+            moves.PushBack(parsed);
+        }
         firstIndex++;
     }
 

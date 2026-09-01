@@ -30,6 +30,7 @@ set(SOURCES
     src/rng.cpp
     src/transpositionTable.cpp
     src/history.cpp
+    src/distanceTable.cpp
     src/pythonModule.cpp
 )
 

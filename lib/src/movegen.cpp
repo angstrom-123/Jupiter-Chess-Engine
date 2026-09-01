@@ -19,6 +19,8 @@ Move Movegen::Stream(const Evaluator& evaluator, bool quiescenceMode)
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
+    m_LastWasQuiet = false;
+
     switch (m_StreamState) {
         case StreamState::NONE:
             FindAttacks();
@@ -30,8 +32,9 @@ Move Movegen::Stream(const Evaluator& evaluator, bool quiescenceMode)
                 if (!std::ranges::contains(m_Quiets, m_BestMove))
                     m_BestMove = Move::Invalid();
             }
-            if (m_BestMove.IsValid())
+            if (m_BestMove.IsValid()) {
                 return m_BestMove;
+            }
             // Fall through
         case StreamState::GOOD_ATTACKS:
             while (m_AttacksIndex < m_Attacks.Size()) {
@@ -55,10 +58,22 @@ Move Movegen::Stream(const Evaluator& evaluator, bool quiescenceMode)
             m_StreamState = StreamState::QUIETS;
             // Fall through
         case StreamState::QUIETS:
+            // Try killer moves first
+            while (m_KillerIndex < MAX_KILLERS) {
+                Move killer = m_Killers[m_KillerIndex++];
+                if (killer.IsValid() && std::ranges::contains(m_Quiets, killer)) {
+                    m_LastWasQuiet = true;
+                    return killer;
+                }
+            }
+
+            // Only emit quiets that weren't killers 
             while (m_QuietsIndex < m_Quiets.Size()) {
-                const Move move = m_Quiets[m_QuietsIndex++];
-                if (move != m_BestMove)
+                const Move move = m_Quiets[m_QuietsIndex++]; 
+                if (move != m_BestMove && !std::ranges::contains(m_Killers, move)) {
+                    m_LastWasQuiet = true;
                     return move;
+                }
             }
             m_StreamState = StreamState::BAD_ATTACKS;
             m_AttacksIndex = 0;
@@ -74,6 +89,11 @@ Move Movegen::Stream(const Evaluator& evaluator, bool quiescenceMode)
         case StreamState::FINISHED:
             return Move::Invalid();
     }
+}
+
+bool Movegen::LastWasQuiet() const
+{
+    return m_LastWasQuiet;
 }
 
 std::size_t Movegen::AttackCount()

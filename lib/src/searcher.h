@@ -8,11 +8,12 @@
 #include "history.h"
 #include "move.h"
 #include "attackTable.h"
+#include "movegen.h"
 #include "openingBook.h"
 #include "rng.h"
 #include "transpositionTable.h"
 
-using LineBuffer = Buffer<Move, 32>;
+using LineBuffer = Buffer<Move, MAX_PLY>;
 
 class Searcher {
 public:
@@ -34,7 +35,7 @@ public:
     uint64_t searchTime{0};
 
 private:
-    void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth);
+    void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv);
     bool IsCheckmate(const BoardState& state);
     uint64_t CalculateSearchTime(const BoardState& state, uint64_t msRemaining);
     Move PickOpeningMove(const BoardState& state);
@@ -49,6 +50,7 @@ private:
     uint64_t m_TimeControlIncrement{0};
     bool m_SearchAborted{false};
     bool m_InOpeningBook{true};
+    KillerMoveBuffer m_Killers;
     RomuMonoRandom m_FastRNG{RomuMonoRandom(time(nullptr))};
     AttackTable m_AttackTable{AttackTable()};
     Evaluator m_Eval{Evaluator(m_AttackTable)};

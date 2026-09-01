@@ -12,9 +12,13 @@ int64_t Evaluator::Evaluate(const BoardState& state) const
     JUPITER_PROFILE();
 
     int64_t eval = 0;
+    float phase = GamePhase(std::forward<const BoardState>(state));
 
-    eval += MaterialBalance(std::forward<const BoardState>(state));
-    eval += PiecePositions(std::forward<const BoardState>(state));
+    int64_t materialBalance = MaterialBalance(std::forward<const BoardState>(state));
+    eval += materialBalance;
+    eval += PiecePositions(std::forward<const BoardState>(state), phase);
+    eval += Mopup(std::forward<const BoardState>(state), materialBalance, phase);
+    eval += CastlingRights(std::forward<const BoardState>(state));
 
     return eval;
 }
@@ -48,7 +52,7 @@ int64_t Evaluator::MaterialBalance(const BoardState& state) const
     return materialEval;
 }
 
-int64_t Evaluator::PiecePositions(const BoardState& state) const
+int64_t Evaluator::PiecePositions(const BoardState& state, float phase) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -57,8 +61,6 @@ int64_t Evaluator::PiecePositions(const BoardState& state) const
 
     Color::Value friendly = state.turn;
     Color::Value enemy = Color::Opposite(state.turn);
-
-    float phase = GamePhase(std::forward<const BoardState>(state));
 
     for (uint8_t i = Piece::PAWN; i < Piece::MAX_ENUM; i++) {
         Piece::Value piece = static_cast<Piece::Value>(i);
@@ -81,15 +83,53 @@ int64_t Evaluator::PiecePositions(const BoardState& state) const
     return piecePositionEval;
 }
 
-int64_t Evaluator::Mobility(const BoardState& state, const AttackTable& table) const 
+int64_t Evaluator::Mopup(const BoardState& state, int64_t materialBalance, float phase) const 
 {
-    // TODO: Uncomment this, need a way first to test the engine though
-    return 0;
-    // Movegen movegen(state, table);
-    // std::size_t attackCount = movegen.GetAttacks().Size();
-    // std::size_t quietCount = movegen.GetQuiets().Size();
-    // const int64_t MOVE_SCORE = 10;
-    // return (attackCount + quietCount) * MOVE_SCORE;
+    int64_t mopupEval = 0;
+
+    const int64_t PROXIMITY_FACTOR = 4;
+    const int64_t EDGE_FACTOR = 10;
+
+    // Only mopup if up material
+    if (materialBalance >= Piece::Evaluate(Piece::PAWN)) {
+        uint8_t friendlyKing = std::countr_zero(state.pieces.OccupancyMask(state.turn, Piece::KING));
+        uint8_t enemyKing = std::countr_zero(state.pieces.OccupancyMask(Color::Opposite(state.turn), Piece::KING));
+
+        // Bonus for king-king proximity
+        mopupEval += (14 - m_DistanceTable.Manhattan(friendlyKing, enemyKing)) * PROXIMITY_FACTOR;
+
+        // Bonus for enemy king proximity to edge
+        mopupEval += m_DistanceTable.ManhattanFromCenter(enemyKing) * EDGE_FACTOR;
+    }
+
+    // Scale by endgame weight
+    return mopupEval * phase;
+}
+
+int64_t Evaluator::CastlingRights(const BoardState& state) const 
+{
+    // Slightly reward having the ability to castle
+    int64_t rightsEval = 0;
+
+    const int64_t RIGHTS_BONUS = 10;
+
+    if (state.rights & CastlingRight::Kingside(state.turn))
+        rightsEval += RIGHTS_BONUS;
+
+    if (state.rights & CastlingRight::Queenside(state.turn))
+        rightsEval += RIGHTS_BONUS;
+    
+    return rightsEval;
+}
+
+int64_t Evaluator::Mobility(const BoardState& state) const 
+{
+    const int64_t MOBILITY_FACTOR = 10;
+
+    Move killers[2] = { Move::Invalid(), Move::Invalid() };
+    Movegen movegen(state, m_AttackTable, killers);
+
+    return (movegen.AttackCount() + movegen.QuietCount()) * MOBILITY_FACTOR;
 }
 
 // 0.0 - 1.0 (midgame - endgame)

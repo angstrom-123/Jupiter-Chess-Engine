@@ -35,6 +35,13 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
     nodesQuiesced = 0;
     nodesLookedUp = 0;
 
+    // Clear killer moves
+    for (std::size_t i = 0; i < MAX_PLY; i++) {
+        for (std::size_t j = 0; j < MAX_KILLERS; j++) {
+            m_Killers[i][j] = Move::Invalid();
+        }
+    }
+
     ExecutionTimer timer;
 
     // If still in opening look up a book move
@@ -43,24 +50,39 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
         return openingMove;
 
     // Decide how long to search for
-    uint64_t targetTime = timer.StartTime() + CalculateSearchTime(state, msRemaining);
+    uint64_t targetMs = timer.StartTime() + CalculateSearchTime(state, msRemaining);
 
     Move finalMove = Move::Invalid();
     uint8_t depth = 0;
     while (++depth) {
         // Check if over time every 4096 nodes
-        if ((nodesSearched & 4095) == 0 && timer.Now() >= targetTime)
+        if ((nodesSearched & 4095) == 0 && timer.Now() >= targetMs)
             break;
 
         nodesSearched++;
 
+        int64_t bestScore = -INT32_MAX;
+        int64_t alpha = -INT32_MAX;
+        int64_t beta = INT32_MAX;
         Move bestMove = Move::Invalid();
-        int64_t bestScore = -INT64_MAX;
-        int64_t alpha = -INT64_MAX;
-        int64_t beta = INT64_MAX;
 
+        Move ttMove = Move::Invalid();
+        const TableEntry entry = m_TranspositionTable.Get(state.zobristKey);
+        if (entry.IsValid() && entry.depth >= depth) {
+            nodesLookedUp++;
+
+            // Only consider exact matches at root (no alpha or beta updates)
+            if (entry.nodeType == NodeType::EXACT) {
+                finalMove = entry.bestMove;
+                continue;
+            }
+
+            ttMove = entry.bestMove;
+        }
+
+        bool isFirstMove = true;
         Move move;
-        Movegen movegen = Movegen(state, m_AttackTable);
+        Movegen movegen = Movegen(state, m_AttackTable, m_Killers[0], ttMove);
         while ((move = movegen.Stream(m_Eval)).IsValid()) {
             // Make move and check legality
             MoveData moveData = MakeMove(state, move);
@@ -72,12 +94,24 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
             // Update state and search
             history.Push(state);
             int64_t score = 0;
-            if (!history.IsRepetition())
-                score = -Search(state, history, timer, -beta, -alpha, depth - 1, 1, targetTime);
+            if (!history.IsRepetition()) {
+                if (isFirstMove) {
+                    // First (assumed best) move searched with full window
+                    score = -Search(state, history, timer, -beta, -alpha, depth - 1, 1, targetMs);
+                } else {
+                    // Subsequent moves searched first with null window to check for alpha increase
+                    score = -Search(state, history, timer, -alpha - 1, -alpha, depth - 1, 1, targetMs);
+                    if (score > alpha && score < beta) {
+                        // If the move raised alpha then re-search with full window
+                        score = -Search(state, history, timer, -beta, -alpha, depth - 1, 1, targetMs);
+                    }
+                }
+            }
 
             // Undo move
             history.Pop();
             UnmakeMove(state, moveData);
+            isFirstMove = false;
 
             // If search terminated mid-move then we discard the search result
             if (m_SearchAborted)
@@ -91,8 +125,14 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
                     alpha = score;
             }
 
-            if (score >= beta)
+            if (score >= beta) {
+                // Killer move
+                if (movegen.LastWasQuiet() && move != m_Killers[0][0]) {
+                    m_Killers[0][1] = m_Killers[0][0];
+                    m_Killers[0][0] = move;
+                }
                 break;
+            }
         }
 
         // Discard search result if aborted (not complete) or not valid (end of game)
@@ -158,10 +198,12 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
             return (entry.nodeType == NodeType::EXACT) ? score : alpha;
     }
 
-    int64_t bestScore = -INT64_MAX;
+    int64_t bestScore = -INT32_MAX;
     Move bestMove = Move::Invalid();
+
+    bool isFirstMove = true;
     Move move;
-    Movegen movegen = Movegen(state, m_AttackTable, ttMove);
+    Movegen movegen = Movegen(state, m_AttackTable, m_Killers[ply], ttMove);
     while ((move = movegen.Stream(m_Eval)).IsValid()) {
         // Make move and check legality
         MoveData moveData = MakeMove(state, move);
@@ -173,12 +215,24 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
         // Update state and search
         history.Push(state);
         int64_t score = 0;
-        if (!history.IsRepetition())
-            score = -Search(state, history, timer, -beta, -alpha, depth - 1, ply + 1, targetMs);
+        if (!history.IsRepetition()) {
+            if (isFirstMove) {
+                // First (assumed best) move searched with full window
+                score = -Search(state, history, timer, -beta, -alpha, depth - 1, ply + 1, targetMs);
+            } else {
+                // Subsequent moves searched first with null window to check for alpha increase
+                score = -Search(state, history, timer, -alpha - 1, -alpha, depth - 1, ply + 1, targetMs);
+                if (score > alpha && score < beta) {
+                    // If the move raised alpha then re-search with full window
+                    score = -Search(state, history, timer, -beta, -alpha, depth - 1, ply + 1, targetMs);
+                }
+            }
+        }
 
         // Undo move
         history.Pop();
         UnmakeMove(state, moveData);
+        isFirstMove = false;
 
         // If search terminated mid-move then we discard the search result
         if (m_SearchAborted)
@@ -192,8 +246,14 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
                 alpha = score;
         }
 
-        if (score >= beta)
+        if (score >= beta) {
+            // Killer move
+            if (movegen.LastWasQuiet() && move != m_Killers[0][0]) {
+                m_Killers[0][1] = m_Killers[0][0];
+                m_Killers[0][0] = move;
+            }
             break;
+        }
     }
 
     // Checkmate or stalemate
@@ -234,7 +294,7 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
 
     // Standing Pat is only an option when not in check
     bool inCheck = SquareUnderAttack(state, state.pieces.OccupancyMask(state.turn, Piece::KING), Color::Opposite(state.turn));
-    int64_t bestScore = (inCheck) ? -INT64_MAX : m_Eval.Evaluate(state);
+    int64_t bestScore = (inCheck) ? -INT32_MAX : m_Eval.Evaluate(state);
 
     // Update search terms
     if (bestScore > alpha)
@@ -243,9 +303,11 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
     if (alpha >= beta)
         return bestScore;
 
+    bool isFirstMove = true;
     bool hasLegalMove = false;
+    Move bestMove = Move::Invalid();
     Move move;
-    Movegen movegen = Movegen(state, m_AttackTable);
+    Movegen movegen = Movegen(state, m_AttackTable, m_Killers[ply]);
     // Consider quiet moves if in check
     while ((move = movegen.Stream(m_Eval, !inCheck)).IsValid()) {
         // Delta pruning (only non-promotions when not in check)
@@ -272,12 +334,24 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
         // Update state and search
         history.Push(state);
         int64_t score = 0;
-        if (!history.IsRepetition())
-            score = -Quiesce(state, history, timer, -beta, -alpha, ply + 1, targetMs);
+        if (!history.IsRepetition()) {
+            if (isFirstMove) {
+                // First (assumed best) move searched with full window
+                score = -Quiesce(state, history, timer, -beta, -alpha, ply + 1, targetMs);
+            } else {
+                // Subsequent moves searched first with null window to check for alpha increase
+                score = -Quiesce(state, history, timer, -alpha - 1, -alpha, ply + 1, targetMs);
+                if (score > alpha && score < beta) {
+                    // If the move raised alpha then re-search with full window
+                    score = -Quiesce(state, history, timer, -beta, -alpha, ply + 1, targetMs);
+                }
+            }
+        }
 
         // Undo move
         history.Pop();
         UnmakeMove(state, moveData);
+        isFirstMove = false;
 
         // If search terminated mid-move then we discard the search result
         if (m_SearchAborted)
@@ -285,18 +359,25 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
 
         // Update search terms
         if (score > bestScore) {
+            bestMove = move;
             bestScore = score;
             if (score > alpha)
                 alpha = score;
         }
 
-        if (score >= beta)
+        if (score >= beta) {
+            // Killer move (possible since we search quiets if in check)
+            if (movegen.LastWasQuiet() && move != m_Killers[ply][0]) {
+                m_Killers[ply][1] = m_Killers[ply][0];
+                m_Killers[ply][0] = move;
+            }
             break;
+        }
     }
 
     // Could be in checkmate
     if (inCheck && !hasLegalMove)
-        return -MATE_EVAL + ply;
+        bestScore = -MATE_EVAL + ply;
 
     return bestScore;
 }
@@ -447,19 +528,16 @@ MoveData Searcher::MakeMove(BoardState& state, Move move)
     return moveData;
 }
 
-void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth)
+void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv)
 {
     JUPITER_TRACE();
 
-    // TODO: Call this function somewhere
-
     // Reconstruct engine's line
     BoardState reconstructState(state); // This mangles state so make a copy
-    LineBuffer principalVariation;
-    principalVariation.Clear();
+    pv.Clear();
 
     // Save the first move
-    principalVariation.PushBack(firstMove);
+    pv.PushBack(firstMove);
     MakeMove(reconstructState, firstMove);
 
     // Iterate over TT entries to find the moves from here
@@ -478,7 +556,7 @@ void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t
         }
 
         // Save the move to the line
-        principalVariation.PushBack(entry.bestMove);
+        pv.PushBack(entry.bestMove);
     }
 }
 
