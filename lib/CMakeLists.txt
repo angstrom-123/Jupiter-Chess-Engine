@@ -25,6 +25,7 @@ set(SOURCES
     src/evaluator.cpp
     src/attackTable.cpp
     src/movegen.cpp
+    src/moveStream.cpp
     src/pieceSquareTable.cpp
     src/zobrist.cpp
     src/rng.cpp

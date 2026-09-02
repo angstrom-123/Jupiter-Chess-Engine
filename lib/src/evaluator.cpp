@@ -17,8 +17,10 @@ int64_t Evaluator::Evaluate(const BoardState& state) const
     int64_t materialBalance = MaterialBalance(std::forward<const BoardState>(state));
     eval += materialBalance;
     eval += PiecePositions(std::forward<const BoardState>(state), phase);
+    eval += Mobility(std::forward<const BoardState>(state));
     eval += Mopup(std::forward<const BoardState>(state), materialBalance, phase);
-    eval += CastlingRights(std::forward<const BoardState>(state));
+    eval += KingSafety(std::forward<const BoardState>(state), phase);
+    eval += PawnStructure(std::forward<const BoardState>(state));
 
     return eval;
 }
@@ -85,13 +87,16 @@ int64_t Evaluator::PiecePositions(const BoardState& state, float phase) const
 
 int64_t Evaluator::Mopup(const BoardState& state, int64_t materialBalance, float phase) const 
 {
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
+
     int64_t mopupEval = 0;
 
     const int64_t PROXIMITY_FACTOR = 4;
     const int64_t EDGE_FACTOR = 10;
 
-    // Only mopup if up material
-    if (materialBalance >= Piece::Evaluate(Piece::PAWN)) {
+    // Only mopup if up material and near to endgame
+    if (phase > 0.6 && materialBalance >= Piece::Evaluate(Piece::PAWN)) {
         uint8_t friendlyKing = std::countr_zero(state.pieces.OccupancyMask(state.turn, Piece::KING));
         uint8_t enemyKing = std::countr_zero(state.pieces.OccupancyMask(Color::Opposite(state.turn), Piece::KING));
 
@@ -106,30 +111,132 @@ int64_t Evaluator::Mopup(const BoardState& state, int64_t materialBalance, float
     return mopupEval * phase;
 }
 
-int64_t Evaluator::CastlingRights(const BoardState& state) const 
+int64_t Evaluator::KingSafety(const BoardState& state, float phase) const 
 {
-    // Slightly reward having the ability to castle
-    int64_t rightsEval = 0;
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
 
-    const int64_t RIGHTS_BONUS = 10;
+    // Ignore king safety if the game phase is advanced enough
+    const float MAX_PHASE = 0.7;
+    if (phase >= MAX_PHASE)
+        return 0;
 
-    if (state.rights & CastlingRight::Kingside(state.turn))
-        rightsEval += RIGHTS_BONUS;
+    int64_t safetyEval = 0;
 
-    if (state.rights & CastlingRight::Queenside(state.turn))
-        rightsEval += RIGHTS_BONUS;
-    
-    return rightsEval;
+    Movegen movegen(state, m_AttackTable);
+    uint8_t kingIndex = std::countr_zero(state.pieces.OccupancyMask(state.turn, Piece::KING));
+    uint8_t kingFile = kingIndex & 7;
+    float inversePhase = MAX_PHASE - phase;
+
+    // King mobility penalty
+    {
+        int64_t kingMobilityEval = 0;
+        const int64_t KING_MOBILITY_FACTOR = -15;
+
+        // Imagine a friendly queen where the king is and see how much it can move
+        AttackMoveBuffer attacks;
+        movegen.FindQueenAttacks(kingIndex, attacks);
+
+        // Penalize excessive mobility (more than 3 squares)
+        if (attacks.Size() > 3)
+            kingMobilityEval += (attacks.Size() - 3) * KING_MOBILITY_FACTOR;
+
+        // Scale down as reaching later game
+        kingMobilityEval *= inversePhase;
+
+        safetyEval += kingMobilityEval;
+    }
+
+    // Pawn shield
+    {
+        int64_t pawnShieldEval = 0;
+        const int64_t PAWN_SHIELD_FACTOR = -20;
+
+        // Determine where the shield should be based on king position and color
+        Bitboard shieldMask = 0;
+        if (kingFile > 4) {
+            // Kingside
+            shieldMask = (state.turn == Color::WHITE)
+                ? 0b00000000'00000000'00000000'00000000'00000000'00000111'00000111'00000000
+                : 0b00000000'00000111'00000111'00000000'00000000'00000000'00000000'00000000;
+        } else if (kingFile < 3) {
+            // Queenside
+            shieldMask = (state.turn == Color::WHITE)
+                ? 0b00000000'00000000'00000000'00000000'00000000'11100000'11100000'00000000
+                : 0b00000000'11100000'11100000'00000000'00000000'00000000'00000000'00000000;
+        }
+
+        // Penalise lack of pawns from the "shield squares"
+        Bitboard overlap = shieldMask & state.pieces.OccupancyMask(state.turn, Piece::PAWN);
+        pawnShieldEval += (3 - std::popcount(overlap)) * PAWN_SHIELD_FACTOR;
+
+        // Scale down with game phase
+        pawnShieldEval *= inversePhase;
+
+        safetyEval += pawnShieldEval;
+    }
+
+    return safetyEval;
 }
 
 int64_t Evaluator::Mobility(const BoardState& state) const 
 {
-    const int64_t MOBILITY_FACTOR = 10;
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
 
-    Move killers[2] = { Move::Invalid(), Move::Invalid() };
-    Movegen movegen(state, m_AttackTable, killers);
+    const int64_t MOBILITY_FACTOR = 5;
 
-    return (movegen.AttackCount() + movegen.QuietCount()) * MOBILITY_FACTOR;
+    Movegen movegen(state, m_AttackTable);
+
+    AttackMoveBuffer attacks;
+    movegen.FindAllAttacks(attacks);
+
+    QuietMoveBuffer quiets;
+    movegen.FindAllQuiets(quiets);
+
+    return (attacks.Size() + quiets.Size()) * MOBILITY_FACTOR;
+}
+
+int64_t Evaluator::PawnStructure(const BoardState& state) const 
+{
+    JUPITER_TRACE();
+    JUPITER_PROFILE();
+
+    int64_t structureEval = 0;
+
+    Bitboard fileMask = 0b10000000'10000000'10000000'10000000'10000000'10000000'10000000'10000000;
+
+    // Doubled pawns
+    {
+        int64_t doubledEval = 0;
+        const int64_t DOUBLED_FACTOR = -10;
+
+        for (std::size_t i = 0; i < 8; i++) {
+            Bitboard filePawns = state.pieces.OccupancyMask(state.turn, Piece::PAWN) & (fileMask >> i);
+            if (std::popcount(filePawns) > 1)
+                doubledEval += DOUBLED_FACTOR;
+        }
+
+        structureEval += doubledEval;
+    }
+
+    // Isolated pawns
+    {
+        // TODO (might be expensive)
+        // TODO: For pawn eval, can have a table of positions indexed by pawn structure 
+        //       - Can use the occupancy as a key (like with zobrist)
+        //       - Can store evals for different pawn structures 
+        //          - How to come up with them?
+        //          - Could just store stats:
+        //              - n doubled 
+        //              - pawn shield strength / shape (triangle, flat, line, etc.)
+        //              - connected pawns 
+        //              - n isolated pawns 
+        //              - etc... 
+        //          - Saves us computing them manually each time. 
+    }
+
+    return structureEval;
 }
 
 // 0.0 - 1.0 (midgame - endgame)

@@ -22,8 +22,9 @@ private:
     int64_t MaterialBalance(const BoardState& state) const;
     int64_t PiecePositions(const BoardState& state, float phase) const;
     int64_t Mopup(const BoardState& state, int64_t materialBalance, float phase) const;
-    int64_t CastlingRights(const BoardState& state) const;
+    int64_t KingSafety(const BoardState& state, float phase) const;
     int64_t Mobility(const BoardState& state) const;
+    int64_t PawnStructure(const BoardState& state) const;
 
 private:
     AttackTable m_AttackTable;

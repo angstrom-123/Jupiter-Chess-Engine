@@ -4,7 +4,7 @@
 #include "log.h"
 #include "move.h"
 #include "evaluator.h"
-#include "movegen.h"
+#include "moveStream.h"
 #include "transpositionTable.h"
 #include "zobrist.h"
 #include "instrumenter.h"
@@ -82,8 +82,8 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
 
         bool isFirstMove = true;
         Move move;
-        Movegen movegen = Movegen(state, m_AttackTable, m_Killers[0], ttMove);
-        while ((move = movegen.Stream(m_Eval)).IsValid()) {
+        MoveStream movegen = MoveStream(state, m_AttackTable, &m_Eval, &m_HistoryTable, &m_Killers[0], ttMove);
+        while ((move = movegen.Stream()).IsValid()) {
             // Make move and check legality
             MoveData moveData = MakeMove(state, move);
             if (!WasLegal(state, moveData)) {
@@ -126,6 +126,9 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
             }
 
             if (score >= beta) {
+                // History heuristic
+                m_HistoryTable[move.from][move.to] += depth * depth;
+
                 // Killer move
                 if (movegen.LastWasQuiet() && move != m_Killers[0][0]) {
                     m_Killers[0][1] = m_Killers[0][0];
@@ -203,8 +206,8 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
 
     bool isFirstMove = true;
     Move move;
-    Movegen movegen = Movegen(state, m_AttackTable, m_Killers[ply], ttMove);
-    while ((move = movegen.Stream(m_Eval)).IsValid()) {
+    MoveStream movegen = MoveStream(state, m_AttackTable, &m_Eval, &m_HistoryTable, &m_Killers[ply], ttMove);
+    while ((move = movegen.Stream()).IsValid()) {
         // Make move and check legality
         MoveData moveData = MakeMove(state, move);
         if (!WasLegal(state, moveData)) {
@@ -247,6 +250,9 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
         }
 
         if (score >= beta) {
+            // History heuristic
+            m_HistoryTable[move.from][move.to] += depth * depth;
+
             // Killer move
             if (movegen.LastWasQuiet() && move != m_Killers[0][0]) {
                 m_Killers[0][1] = m_Killers[0][0];
@@ -307,9 +313,9 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
     bool hasLegalMove = false;
     Move bestMove = Move::Invalid();
     Move move;
-    Movegen movegen = Movegen(state, m_AttackTable, m_Killers[ply]);
+    MoveStream movegen = MoveStream(state, m_AttackTable, &m_Eval, &m_HistoryTable, &m_Killers[ply]);
     // Consider quiet moves if in check
-    while ((move = movegen.Stream(m_Eval, !inCheck)).IsValid()) {
+    while ((move = movegen.Stream(!inCheck)).IsValid()) {
         // Delta pruning (only non-promotions when not in check)
         if (!inCheck && !Piece::IsValid(move.promote)) {
             const int64_t DELTA_MARGIN = Piece::Evaluate(Piece::KNIGHT); // TODO: Probably want this value to be slightly higher?

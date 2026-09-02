@@ -8,7 +8,7 @@
 #include "history.h"
 #include "move.h"
 #include "attackTable.h"
-#include "movegen.h"
+#include "moveStream.h"
 #include "openingBook.h"
 #include "rng.h"
 #include "transpositionTable.h"
@@ -50,11 +50,12 @@ private:
     uint64_t m_TimeControlIncrement{0};
     bool m_SearchAborted{false};
     bool m_InOpeningBook{true};
-    KillerMoveBuffer m_Killers;
+    Buffer<KillerMoveBuffer, MAX_PLY> m_Killers;
     RomuMonoRandom m_FastRNG{RomuMonoRandom(time(nullptr))};
     AttackTable m_AttackTable{AttackTable()};
     Evaluator m_Eval{Evaluator(m_AttackTable)};
     Zobrist m_Zobrist;
     TranspositionTable m_TranspositionTable;
     OpeningBook m_OpeningBook;
+    uint16_t m_HistoryTable[64][64]{};
 };

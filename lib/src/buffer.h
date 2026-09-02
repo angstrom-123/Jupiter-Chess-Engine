@@ -46,6 +46,14 @@ public:
     {
         return capacity;
     }
+    bool Contains(const T& item) const
+    {
+        for (std::size_t i = 0; i < m_Size; i++) {
+            if (m_Data[i] == item)
+                return true;
+        }
+        return false;
+    }
     T *begin()
     {
         return m_Data;
