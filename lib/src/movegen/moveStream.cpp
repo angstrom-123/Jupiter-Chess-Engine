@@ -1,6 +1,6 @@
 #include "moveStream.h"
 #include "core.h"
-#include "instrumenter.h"
+#include "util/instrumenter.h"
 #include <algorithm>
 
 Move MoveStream::Stream(bool quiescenceMode)

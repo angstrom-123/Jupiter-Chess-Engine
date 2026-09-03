@@ -1,17 +1,17 @@
 #pragma once
 
-#include "boardState.h"
-#include "buffer.h"
+#include "board/boardState.h"
+#include "board/history.h"
 #include "core.h"
-#include "evaluator.h"
-#include "executionTimer.h"
-#include "history.h"
-#include "move.h"
-#include "attackTable.h"
-#include "moveStream.h"
-#include "openingBook.h"
-#include "rng.h"
-#include "transpositionTable.h"
+#include "datastructure/buffer.h"
+#include "evaluation/evaluator.h"
+#include "movegen/move.h"
+#include "movegen/attackTable.h"
+#include "movegen/moveStream.h"
+#include "util/executionTimer.h"
+#include "util/rng.h"
+#include "search/openingBook.h"
+#include "search/transpositionTable.h"
 
 using LineBuffer = Buffer<Move, MAX_PLY>;
 

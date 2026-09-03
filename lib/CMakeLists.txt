@@ -16,23 +16,23 @@ find_package(Python3 COMPONENTS Development REQUIRED)
 
 set(SOURCES
     src/core.cpp 
-    src/bitboard.cpp 
-    src/board.cpp 
-    src/move.cpp
-    src/openingBook.cpp
-    src/executionTimer.cpp
-    src/searcher.cpp
-    src/evaluator.cpp
-    src/attackTable.cpp
-    src/movegen.cpp
-    src/moveStream.cpp
-    src/pieceSquareTable.cpp
-    src/zobrist.cpp
-    src/rng.cpp
-    src/transpositionTable.cpp
-    src/history.cpp
-    src/distanceTable.cpp
     src/pythonModule.cpp
+    src/board/bitboard.cpp 
+    src/board/board.cpp 
+    src/board/zobrist.cpp
+    src/board/history.cpp
+    src/evaluation/pieceSquareTable.cpp
+    src/evaluation/distanceTable.cpp
+    src/evaluation/evaluator.cpp
+    src/movegen/move.cpp
+    src/movegen/attackTable.cpp
+    src/movegen/movegen.cpp
+    src/movegen/moveStream.cpp
+    src/search/searcher.cpp
+    src/search/transpositionTable.cpp
+    src/search/openingBook.cpp
+    src/util/rng.cpp
+    src/util/executionTimer.cpp
 )
 
 # Use module instead of shared so it compiles nicely on mac and linux

@@ -5,15 +5,15 @@
 #include <filesystem>
 #include <fstream>
 #include "core.h"
-#include "instrumenter.h"
+#include "util/instrumenter.h"
 
 namespace fs = std::filesystem;
 
 // TODO: Tune the weight factor so that we play from book, but avoid the really bad moves still
 const float WEIGHT_FACTOR = 0.70; // Only allow moves within 30% of best move in whole book
 const uint64_t POLYGLOT_ENTRY_SIZE = 16;
-// const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path() / "assets" / "book.bin";
-const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path() / "assets" / "lumbras_book.bin"; 
+// const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "book.bin";
+const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "lumbras_book.bin"; 
 const uint64_t randoms[781] = {
     0x9D39247E33776D41, 0x2AF7398005AAA5C7, 0x44DB015024623547, 0x9C15F73E62A76AE2,
     0x75834465489C0C89, 0x3290AC3A203001BF, 0x0FBBAD1F61042279, 0xE83A908FF2FB60CA,

@@ -1,6 +1,6 @@
 #include "transpositionTable.h"
 #include <cstring>
-#include "instrumenter.h"
+#include "util/instrumenter.h"
 
 #define ALWAYS_OVERWRITE false 
 #define PREFER_DEPTH true

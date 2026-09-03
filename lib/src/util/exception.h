@@ -1,6 +1,6 @@
 #pragma once
 
-#include "stackTrace.h"
+#include "util/stackTrace.h"
 #include <stdexcept>
 #include <string>
 #include <sstream>

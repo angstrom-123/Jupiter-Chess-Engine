@@ -7,10 +7,10 @@
 
 #include "libjupiter/board.h"
 #include "core.h"
-#include "exception.h"
-#include "instrumenter.h"
-#include "move.h"
-#include "openingBook.h"
+#include "util/exception.h"
+#include "util/instrumenter.h"
+#include "movegen/move.h"
+#include "search/openingBook.h"
 #include "zobrist.h"
 
 namespace libjupiter {

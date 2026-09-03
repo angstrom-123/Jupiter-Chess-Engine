@@ -1,13 +1,13 @@
 #include "searcher.h"
-#include "boardState.h"
-#include "executionTimer.h"
-#include "log.h"
-#include "move.h"
-#include "evaluator.h"
-#include "moveStream.h"
+#include "board/boardState.h"
+#include "util/executionTimer.h"
+#include "util/log.h"
+#include "movegen/move.h"
+#include "evaluation/evaluator.h"
+#include "movegen/moveStream.h"
 #include "transpositionTable.h"
-#include "zobrist.h"
-#include "instrumenter.h"
+#include "board/zobrist.h"
+#include "util/instrumenter.h"
 
 #include <cmath>
 #include <cstdint>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "zobrist.h"
+#include "board/zobrist.h"
 #include <vector>
 
 class History {

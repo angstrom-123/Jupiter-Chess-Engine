@@ -1,8 +1,8 @@
 #pragma once 
 
 #include <cstdint>
-#include "circularStack.h"
-#include "log.h"
+#include "datastructure/circularStack.h"
+#include "util/log.h"
 
 struct StackFrame {
     const char *functionName{nullptr};

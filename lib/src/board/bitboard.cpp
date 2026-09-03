@@ -2,8 +2,8 @@
 #include <bit>
 #include <sstream>
 #include "core.h"
-#include "exception.h"
-#include "instrumenter.h"
+#include "util/exception.h"
+#include "util/instrumenter.h"
 
 void BitboardSet::StartPos()
 {

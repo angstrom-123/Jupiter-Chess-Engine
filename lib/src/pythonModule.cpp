@@ -5,14 +5,14 @@
 #include <iostream>
 
 #include <Python.h>
+#include <object.h>
 #include <methodobject.h>
 #include <pytypedefs.h>
 #include <unicodeobject.h>
 
-#include "instrumenter.h"
+#include "util/instrumenter.h"
 #include "libjupiter/board.h"
-#include "move.h"
-#include "object.h"
+#include "movegen/move.h"
 
 // Wrappers
 

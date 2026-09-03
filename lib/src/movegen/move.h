@@ -1,8 +1,8 @@
 #pragma once
 
-#include "bitboard.h"
+#include "board/bitboard.h"
+#include "board/zobrist.h"
 #include "core.h"
-#include "zobrist.h"
 
 union LongAlgebraicMove {
     struct {

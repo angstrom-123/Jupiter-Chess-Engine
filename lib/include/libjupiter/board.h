@@ -3,12 +3,12 @@
 #include <cstdint>
 #include <string>
 
-#include "boardState.h"
 #include "core.h"
-#include "move.h"
-#include "openingBook.h"
-#include "searcher.h"
-#include "history.h"
+#include "board/boardState.h"
+#include "board/history.h"
+#include "movegen/move.h"
+#include "search/openingBook.h"
+#include "search/searcher.h"
 
 namespace libjupiter {
     class Board {

@@ -1,10 +1,10 @@
-#include "evaluator.h"
+#include "evaluation/evaluator.h"
+#include "datastructure/buffer.h"
+#include "util/instrumenter.h"
+#include "movegen/movegen.h"
 #include <bit>
 #include <cmath>
 #include <cstdint>
-#include "buffer.h"
-#include "instrumenter.h"
-#include "movegen.h"
 
 int64_t Evaluator::Evaluate(const BoardState& state) const
 {

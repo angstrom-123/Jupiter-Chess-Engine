@@ -1,9 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include "boardState.h"
-#include "move.h"
-#include "zobrist.h"
+#include "movegen/move.h"
+#include "board/boardState.h"
+#include "board/zobrist.h"
 
 constexpr uint64_t TRANSPOSITION_TABLE_KEY_BITS = 25;
 constexpr std::size_t TRANSPOSITION_TABLE_SIZE = 1ul << TRANSPOSITION_TABLE_KEY_BITS;

@@ -1,7 +1,7 @@
 #include "movegen.h"
-#include "bitboard.h"
+#include "board/bitboard.h"
 #include "core.h"
-#include "instrumenter.h"
+#include "util/instrumenter.h"
 #include <bit>
 
 void Movegen::FindAllAttacks(AttackMoveBuffer& attacks)

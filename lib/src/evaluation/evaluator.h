@@ -1,10 +1,10 @@
 #pragma once 
 
-#include "attackTable.h"
-#include "boardState.h"
-#include "distanceTable.h"
-#include "move.h"
-#include "pieceSquareTable.h"
+#include "movegen/attackTable.h"
+#include "movegen/move.h"
+#include "board/boardState.h"
+#include "evaluation/distanceTable.h"
+#include "evaluation/pieceSquareTable.h"
 #include <cstdint>
 
 const int64_t MATE_EVAL = 100'000'000;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "exception.h"
+#include "util/exception.h"
 #include <cstdint>
 #include <cstdlib>
 #include <string>

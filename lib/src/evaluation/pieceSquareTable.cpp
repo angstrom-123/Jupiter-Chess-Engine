@@ -1,5 +1,5 @@
 #include "pieceSquareTable.h"
-#include "instrumenter.h"
+#include "util/instrumenter.h"
 
 PieceSquareTables::PieceSquareTables()
 {

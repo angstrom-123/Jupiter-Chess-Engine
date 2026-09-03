@@ -1,6 +1,6 @@
-#include "history.h"
-#include "instrumenter.h"
-#include "boardState.h"
+#include "board/history.h"
+#include "util/instrumenter.h"
+#include "board/boardState.h"
 
 History::History()
 {

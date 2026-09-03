@@ -1,7 +1,7 @@
 #include "zobrist.h"
 #include "core.h"
-#include "rng.h"
-#include "instrumenter.h"
+#include "util/rng.h"
+#include "util/instrumenter.h"
 #include "boardState.h"
 
 #include <bit>

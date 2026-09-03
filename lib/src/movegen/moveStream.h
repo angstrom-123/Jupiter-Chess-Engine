@@ -1,11 +1,11 @@
 #pragma once
 
-#include "attackTable.h"
-#include "boardState.h"
-#include "buffer.h"
-#include "evaluator.h"
-#include "move.h"
-#include "movegen.h"
+#include "movegen/attackTable.h"
+#include "movegen/move.h"
+#include "movegen/movegen.h"
+#include "board/boardState.h"
+#include "datastructure/buffer.h"
+#include "evaluation/evaluator.h"
 #include <cstdint>
 
 // Not quite the theoretical maximums but I don't anticipate this becoming a problem

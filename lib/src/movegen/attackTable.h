@@ -1,8 +1,8 @@
 #pragma once
 
-#include "bitboard.h"
-#include "buffer.h"
-#include "rng.h"
+#include "board/bitboard.h"
+#include "datastructure/buffer.h"
+#include "util/rng.h"
 #include <cstdint>
 #include <vector>
 #include <filesystem>

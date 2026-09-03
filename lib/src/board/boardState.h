@@ -1,7 +1,7 @@
 #pragma once
 
-#include "bitboard.h"
-#include "zobrist.h"
+#include "board/bitboard.h"
+#include "board/zobrist.h"
 
 class BoardState {
 public:

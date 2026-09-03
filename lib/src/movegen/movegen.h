@@ -1,8 +1,8 @@
 #include <cstdint>
-#include "attackTable.h"
-#include "boardState.h"
+#include "movegen/attackTable.h"
+#include "movegen/move.h"
+#include "board/boardState.h"
 #include "core.h"
-#include "move.h"
 
 const uint64_t MAX_POSSIBLE_QUIETS = 100;
 const uint64_t MAX_POSSIBLE_ATTACKS = 100;

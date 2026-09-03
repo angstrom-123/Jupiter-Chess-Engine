@@ -8,9 +8,9 @@
 #include <iterator>
 #include <bit>
 #include <array>
-#include "exception.h"
-#include "instrumenter.h"
-#include "rng.h"
+#include "util/exception.h"
+#include "util/instrumenter.h"
+#include "util/rng.h"
 
 const std::array<int8_t[2], 2> PAWN_ATTACKS = {{ { 1, 1 }, { -1, 1 } }}; // Subject to direction
 const std::array<int8_t[2], 8> KNIGHT_ATTACKS = {{ { 1, 2 }, { 2, 1 }, { 2, -1 }, { 1, -2 }, { -1, -2 }, { -2, -1 }, { -2, 1 }, { -1, 2 } }};
@@ -18,7 +18,7 @@ const std::array<int8_t[2], 4> BISHOP_ATTACKS = {{ { 1, 1 }, { -1, 1 }, { 1, -1 
 const std::array<int8_t[2], 4> ROOK_ATTACKS = {{ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }};
 const std::array<int8_t[2], 8> KING_ATTACKS = {{ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } }};
 
-static const fs::path MAGIC_FILE_PATH = fs::path(__FILE__).parent_path().parent_path() / "assets" / "magics.bin";
+static const fs::path MAGIC_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "magics.bin";
 
 AttackTable::AttackTable()
 {
