@@ -3,6 +3,7 @@
 #include "board/bitboard.h"
 #include "board/zobrist.h"
 #include "core.h"
+#include "evaluation/pieceSquareTable.h"
 
 union LongAlgebraicMove {
     struct {
@@ -39,5 +40,5 @@ struct MoveData {
     Color::Value turn{Color::Invalid()};
     uint8_t enPassantIndex{0};
     uint8_t fiftyMoveCounter{0};
-    uint16_t halfMoves{0};
+    PSTScore pstScore{PSTScore(0, 0)};
 };

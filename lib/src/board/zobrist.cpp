@@ -28,10 +28,8 @@ ZobristKey Zobrist::ComputeKey(const BoardState& state) const
     uint64_t offset = 0;
 
     // Pieces
-    for (uint8_t i = 0; i < Color::MAX_ENUM; i++) {
-        Color::Value color = static_cast<Color::Value>(i);
-        for (uint8_t j = Piece::PAWN; j < Piece::MAX_ENUM; j++) {
-            Piece::Value piece = static_cast<Piece::Value>(j);
+    for (const Color::Value color : { Color::WHITE, Color::BLACK }) {
+        for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
             Bitboard occupancy = state.pieces.OccupancyMask(color, piece);
             while (occupancy) {
                 uint8_t index = std::countr_zero(occupancy);

@@ -5,6 +5,7 @@
 #include "core.h"
 #include "datastructure/buffer.h"
 #include "evaluation/evaluator.h"
+#include "evaluation/pieceSquareTable.h"
 #include "movegen/move.h"
 #include "movegen/attackTable.h"
 #include "movegen/moveStream.h"
@@ -17,7 +18,7 @@ using LineBuffer = Buffer<Move, MAX_PLY>;
 
 class Searcher {
 public:
-    Searcher(Zobrist& zobrist, OpeningBook& openingBook);
+    Searcher(Zobrist& zobrist, OpeningBook& openingBook, PieceSquareTables& pieceSquareTables);
     Move FindBest(BoardState& state, History& history, uint64_t msRemaining);
     MoveData MakeMove(BoardState &state, Move move);
     void SetTimeControl(uint64_t seconds, uint64_t increment);
@@ -54,8 +55,9 @@ private:
     RomuMonoRandom m_FastRNG{RomuMonoRandom(time(nullptr))};
     AttackTable m_AttackTable{AttackTable()};
     Evaluator m_Eval{Evaluator(m_AttackTable)};
-    Zobrist m_Zobrist;
+    const Zobrist &m_Zobrist;
+    const OpeningBook &m_OpeningBook;
+    const PieceSquareTables &m_PieceSquareTables;
     TranspositionTable m_TranspositionTable;
-    OpeningBook m_OpeningBook;
     uint16_t m_HistoryTable[64][64]{};
 };

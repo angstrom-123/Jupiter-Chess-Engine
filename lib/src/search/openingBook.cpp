@@ -252,7 +252,7 @@ OpeningBook::OpeningBook()
     }
 }
 
-bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves)
+bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -310,7 +310,7 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves)
     return moves.Size() > 0;
 }
 
-std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64_t bits)
+std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64_t bits) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -357,7 +357,7 @@ std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64
     return std::make_pair(move, weight);
 }
 
-ZobristKey OpeningBook::ZobristHash(const BoardState& state)
+ZobristKey OpeningBook::ZobristHash(const BoardState& state) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -366,8 +366,7 @@ ZobristKey OpeningBook::ZobristHash(const BoardState& state)
     uint64_t offset = 0;
 
     // Pieces (polyglot goes black then white per piece, same piece order)
-    for (uint8_t j = Piece::PAWN; j < Piece::MAX_ENUM; j++) {
-        Piece::Value piece = static_cast<Piece::Value>(j);
+    for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
         for (uint8_t i = Color::MAX_ENUM; i > Color::WHITE; i--) {
             Color::Value color = static_cast<Color::Value>(i - 1);
             Bitboard occupancy = state.pieces.OccupancyMask(color, piece);

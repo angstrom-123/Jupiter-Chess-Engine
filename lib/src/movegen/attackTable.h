@@ -25,7 +25,7 @@ public:
     AttackTable();
 
     // NOTE: Occupancy bitboard only considered for sliding pieces
-    Bitboard GetAttacks(uint8_t index, Piece::Value piece, Color::Value color, Bitboard occupancy) const;
+    [[nodiscard]] Bitboard GetAttacks(uint8_t index, Piece::Value piece, Color::Value color, Bitboard occupancy) const;
 
 private:
     void SerializeMagics(const fs::path& path);
@@ -34,9 +34,9 @@ private:
     void GenerateKnightTables();
     void GenerateKingTables();
     void GenerateSliderTables();
-    Bitboard GenerateSliderMask(uint8_t index, const std::array<int8_t[2], 4>& deltas);
-    Bitboard GenerateSliderAttacks(uint8_t index, Bitboard occupancy, const std::array<int8_t[2], 4>& deltas);
-    Bitboard FindMagic(uint8_t index, RomuQuadRandom& rng, Piece::Value piece, uint64_t maxAttempts = 10000000);
+    [[nodiscard]] Bitboard GenerateSliderMask(uint8_t index, const std::array<int8_t[2], 4>& deltas);
+    [[nodiscard]] Bitboard GenerateSliderAttacks(uint8_t index, Bitboard occupancy, const std::array<int8_t[2], 4>& deltas);
+    [[nodiscard]] Bitboard FindMagic(uint8_t index, RomuQuadRandom& rng, Piece::Value piece, uint64_t maxAttempts = 10000000);
 
 private:
     Buffer<Bitboard, 64> m_KnightTables;

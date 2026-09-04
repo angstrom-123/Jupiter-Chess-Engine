@@ -1,4 +1,5 @@
 #include "evaluation/evaluator.h"
+#include "core.h"
 #include "datastructure/buffer.h"
 #include "util/instrumenter.h"
 #include "movegen/movegen.h"
@@ -11,11 +12,21 @@ int64_t Evaluator::Evaluate(const BoardState& state) const
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    int64_t eval = 0;
+    // Draw by fifty move rule
+    if (state.fiftyMoveCounter >= 75)
+        return 0;
+
+    bool isMaterialDraw = false;
+    int64_t counts[Color::MAX_ENUM][Piece::MAX_ENUM] = {};
+    int64_t materialBalance = MaterialBalance(std::forward<const BoardState>(state), counts, isMaterialDraw);
+    
+    // Draw by lack of material
+    if (isMaterialDraw)
+        return 0;
+
     float phase = GamePhase(std::forward<const BoardState>(state));
 
-    int64_t materialBalance = MaterialBalance(std::forward<const BoardState>(state));
-    eval += materialBalance;
+    int64_t eval = materialBalance;
     eval += PiecePositions(std::forward<const BoardState>(state), phase);
     eval += Mobility(std::forward<const BoardState>(state));
     eval += Mopup(std::forward<const BoardState>(state), materialBalance, phase);
@@ -25,25 +36,51 @@ int64_t Evaluator::Evaluate(const BoardState& state) const
     return eval;
 }
 
-int64_t Evaluator::MaterialBalance(const BoardState& state) const
+// Since this function already needs to count all pieces, can check for material draw here
+int64_t Evaluator::MaterialBalance(const BoardState& state, int64_t (& pieceCounts)[Color::MAX_ENUM][Piece::MAX_ENUM], bool& isMaterialDraw) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
-
-    // Draw by fifty move rule
-    if (state.fiftyMoveCounter >= 75)
-        return 0;
 
     int64_t materialEval = 0;
 
     Color::Value friendly = state.turn;
     Color::Value enemy = Color::Opposite(state.turn);
 
-    int64_t nPawns = state.pieces.Count(friendly, Piece::PAWN) - state.pieces.Count(enemy, Piece::PAWN);
-    int64_t nKnights = state.pieces.Count(friendly, Piece::KNIGHT) - state.pieces.Count(enemy, Piece::KNIGHT);
-    int64_t nBishops = state.pieces.Count(friendly, Piece::BISHOP) - state.pieces.Count(enemy, Piece::BISHOP);
-    int64_t nRooks = state.pieces.Count(friendly, Piece::ROOK) - state.pieces.Count(enemy, Piece::ROOK);
-    int64_t nQueens = state.pieces.Count(friendly, Piece::QUEEN) - state.pieces.Count(enemy, Piece::QUEEN);
+    // Count up all pieces
+    for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
+        pieceCounts[friendly][piece] = state.pieces.Count(friendly, piece);
+        pieceCounts[enemy][piece] = state.pieces.Count(enemy, piece);
+    }
+
+    // Check for material draw
+    int64_t heavyCount = pieceCounts[friendly][Piece::PAWN] + pieceCounts[enemy][Piece::PAWN] 
+        + pieceCounts[friendly][Piece::ROOK] + pieceCounts[enemy][Piece::ROOK]
+        + pieceCounts[friendly][Piece::QUEEN] + pieceCounts[enemy][Piece::QUEEN];
+
+    // Any amount of pawns, rooks, or queens could potentially mate
+    if (heavyCount == 0) {
+        int64_t friendlyMinors = pieceCounts[friendly][Piece::BISHOP] + pieceCounts[friendly][Piece::KNIGHT];
+        int64_t enemyMinors = pieceCounts[enemy][Piece::BISHOP] + pieceCounts[enemy][Piece::KNIGHT];
+
+        // Always a draw - 1 minor piece a side is not enough
+        if (friendlyMinors < 2 && enemyMinors < 2) {
+            isMaterialDraw = true;
+            return 0;
+        }
+
+        // No forced mate with only 2 knights (other combos of 2 minors can mate)
+        if ((friendlyMinors == 2 && pieceCounts[friendly][Piece::KNIGHT] == 2) || (enemyMinors == 2 && pieceCounts[enemy][Piece::KNIGHT] == 2)) {
+            isMaterialDraw = true;
+            return 0;
+        }
+    }
+
+    int64_t nPawns = pieceCounts[friendly][Piece::PAWN] - pieceCounts[enemy][Piece::PAWN];
+    int64_t nKnights = pieceCounts[friendly][Piece::KNIGHT] - pieceCounts[enemy][Piece::KNIGHT];
+    int64_t nBishops = pieceCounts[friendly][Piece::BISHOP] - pieceCounts[enemy][Piece::BISHOP];
+    int64_t nRooks = pieceCounts[friendly][Piece::ROOK] - pieceCounts[enemy][Piece::ROOK];
+    int64_t nQueens = pieceCounts[friendly][Piece::QUEEN] - pieceCounts[enemy][Piece::QUEEN];
 
     materialEval = (nPawns * Piece::Evaluate(Piece::PAWN)) 
         + (nKnights * Piece::Evaluate(Piece::KNIGHT)) 
@@ -59,30 +96,8 @@ int64_t Evaluator::PiecePositions(const BoardState& state, float phase) const
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    int64_t piecePositionEval = 0;
-
-    Color::Value friendly = state.turn;
-    Color::Value enemy = Color::Opposite(state.turn);
-
-    for (uint8_t i = Piece::PAWN; i < Piece::MAX_ENUM; i++) {
-        Piece::Value piece = static_cast<Piece::Value>(i);
-
-        Bitboard friendlyoccupancy = state.pieces.OccupancyMask(friendly, piece);
-        while (friendlyoccupancy) {
-            uint8_t index = std::countr_zero(friendlyoccupancy);
-            piecePositionEval += m_PieceSquareTables.Get(friendly, piece, index, phase);
-            friendlyoccupancy &= (friendlyoccupancy - 1);
-        }
-
-        Bitboard enemyoccupancy = state.pieces.OccupancyMask(enemy, piece);
-        while (enemyoccupancy) {
-            uint8_t index = std::countr_zero(enemyoccupancy);
-            piecePositionEval -= m_PieceSquareTables.Get(enemy, piece, index, phase);
-            enemyoccupancy &= (enemyoccupancy - 1);
-        }
-    }
-
-    return piecePositionEval;
+    PSTScore relativeScore = (state.turn == Color::WHITE) ? state.pstScore : -state.pstScore;
+    return (relativeScore.midgame * (1.0 - phase)) + (relativeScore.endgame * phase);
 }
 
 int64_t Evaluator::Mopup(const BoardState& state, int64_t materialBalance, float phase) const 
@@ -117,21 +132,22 @@ int64_t Evaluator::KingSafety(const BoardState& state, float phase) const
     JUPITER_PROFILE();
 
     // Ignore king safety if the game phase is advanced enough
-    const float MAX_PHASE = 0.7;
+    const float MAX_PHASE = 0.6;
     if (phase >= MAX_PHASE)
         return 0;
 
     int64_t safetyEval = 0;
 
     Movegen movegen(state, m_AttackTable);
-    uint8_t kingIndex = std::countr_zero(state.pieces.OccupancyMask(state.turn, Piece::KING));
+    Bitboard kingBit = state.pieces.OccupancyMask(state.turn, Piece::KING);
+    uint8_t kingIndex = std::countr_zero(kingBit);
     uint8_t kingFile = kingIndex & 7;
     float inversePhase = MAX_PHASE - phase;
 
     // King mobility penalty
     {
         int64_t kingMobilityEval = 0;
-        const int64_t KING_MOBILITY_FACTOR = -15;
+        const int64_t KING_MOBILITY_FACTOR = -20;
 
         // Imagine a friendly queen where the king is and see how much it can move
         AttackMoveBuffer attacks;
@@ -157,18 +173,23 @@ int64_t Evaluator::KingSafety(const BoardState& state, float phase) const
         if (kingFile > 4) {
             // Kingside
             shieldMask = (state.turn == Color::WHITE)
-                ? 0b00000000'00000000'00000000'00000000'00000000'00000111'00000111'00000000
-                : 0b00000000'00000111'00000111'00000000'00000000'00000000'00000000'00000000;
+                ? 0b00000000'00000000'00000000'00000000'00000000'00000111'00000111'00000111
+                : 0b00000111'00000111'00000111'00000000'00000000'00000000'00000000'00000000;
         } else if (kingFile < 3) {
             // Queenside
             shieldMask = (state.turn == Color::WHITE)
-                ? 0b00000000'00000000'00000000'00000000'00000000'11100000'11100000'00000000
-                : 0b00000000'11100000'11100000'00000000'00000000'00000000'00000000'00000000;
+                ? 0b00000000'00000000'00000000'00000000'00000000'11100000'11100000'11100000
+                : 0b11100000'11100000'11100000'00000000'00000000'00000000'00000000'00000000;
         }
 
         // Penalise lack of pawns from the "shield squares"
-        Bitboard overlap = shieldMask & state.pieces.OccupancyMask(state.turn, Piece::PAWN);
-        pawnShieldEval += (3 - std::popcount(overlap)) * PAWN_SHIELD_FACTOR;
+        if (!(kingBit & shieldMask)) {
+            // If the king is not in the "shield zone" then we give the full penalty
+            pawnShieldEval += 3 * PAWN_SHIELD_FACTOR;
+        } else {
+            Bitboard overlap = shieldMask & state.pieces.OccupancyMask(state.turn, Piece::PAWN);
+            pawnShieldEval += (3 - std::popcount(overlap)) * PAWN_SHIELD_FACTOR;
+        }
 
         // Scale down with game phase
         pawnShieldEval *= inversePhase;
@@ -296,24 +317,21 @@ int64_t Evaluator::SEE(const BoardState& state, Move move) const
 
         // Find attackers
         Bitboard attackers[Color::MAX_ENUM][Piece::MAX_ENUM];
-        for (uint8_t i = Color::WHITE; i < Color::MAX_ENUM; i++) {
-            Color::Value friendly = static_cast<Color::Value>(i);
+        for (const Color::Value friendly : { Color::WHITE, Color::BLACK }) {
             Color::Value opponent = Color::Opposite(friendly);
-            for (uint8_t j = Piece::PAWN; j < Piece::MAX_ENUM; j++) {
-                Piece::Value piece = static_cast<Piece::Value>(j);
+            for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++)
                 attackers[friendly][piece] = m_AttackTable.GetAttacks(move.to, piece, opponent, pieces.OccupancyMask()) & pieces.OccupancyMask(friendly, piece);
-            }
         }
 
         // Find least valuable attacker
         uint8_t from = UINT8_MAX;
         Piece::Value attacker = Piece::Invalid();
-        for (uint8_t i = Piece::PAWN; i < Piece::MAX_ENUM; i++) {
-            Bitboard attackerOccupancy = attackers[turn][i];
+        for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
+            Bitboard attackerOccupancy = attackers[turn][piece];
             if (attackerOccupancy) {
                 from = std::countr_zero(attackerOccupancy);
-                attacker = static_cast<Piece::Value>(i);
-                attackers[turn][i] &= (attackerOccupancy - 1);
+                attacker = piece;
+                attackers[turn][piece] &= (attackerOccupancy - 1);
                 break;
             }
         }

@@ -19,34 +19,34 @@ public:
     template<class... Args> void EmplaceBack(Args&&... args)
     {
         new (&m_Data[m_Size++]) T(std::forward<Args>(args)...);
-    }
-    void PopBack()
+    } 
+    void PopBack() 
     {
         m_Data[m_Size--].~T();
     }
-    void Clear()
+    void Clear() 
     {
         for (std::size_t i = 0; i < m_Size; i++)
             m_Data[i].~T();
         m_Size = 0;
     }
-    void Resize(std::size_t size)
+    void Resize(std::size_t size) 
     {
         m_Size = size;
     }
-    T *Data()
+    [[nodiscard]] T *Data() 
     {
         return m_Data;
     }
-    std::size_t Size() const
+    [[nodiscard]] std::size_t Size() const 
     {
         return m_Size;
     }
-    std::size_t Capacity() const
+    [[nodiscard]] std::size_t Capacity() const 
     {
         return capacity;
     }
-    bool Contains(const T& item) const
+    [[nodiscard]] bool Contains(const T& item) const 
     {
         for (std::size_t i = 0; i < m_Size; i++) {
             if (m_Data[i] == item)
@@ -54,35 +54,35 @@ public:
         }
         return false;
     }
-    T *begin()
+    [[nodiscard]] T *begin() 
     {
         return m_Data;
     }
-    T *end()
+    [[nodiscard]] T *end() 
     {
         return m_Data + m_Size;
     }
-    const T *begin() const
+    [[nodiscard]] const T *begin() const 
     { 
         return m_Data;
-    }
-    const T *end() const
+    } 
+    [[nodiscard]] const T *end() const 
     {
         return m_Data + m_Size;
     }
-    const T *cbegin() const
+    [[nodiscard]] const T *cbegin() const 
     {
         return m_Data;
     }
-    const T *cend() const
+    [[nodiscard]] const T *cend() const 
     {
         return m_Data + m_Size;
     }
-    T& operator[](std::size_t i) 
+    [[nodiscard]] T& operator[](std::size_t i) 
     { 
         return m_Data[i]; 
     }
-    const T& operator[](std::size_t i) const
+    [[nodiscard]] const T& operator[](std::size_t i) const 
     { 
         return m_Data[i]; 
     }

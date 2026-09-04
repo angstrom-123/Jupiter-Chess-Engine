@@ -10,12 +10,10 @@
 #include "util/exception.h"
 #include "util/instrumenter.h"
 #include "movegen/move.h"
-#include "search/openingBook.h"
 #include "zobrist.h"
 
 namespace libjupiter {
     Board::Board(const char *fen)
-        : m_Zobrist(), m_OpeningBook(), m_Searcher(m_Zobrist, m_OpeningBook)
     {
         JUPITER_TRACE();
 
@@ -28,8 +26,8 @@ namespace libjupiter {
                 CastlingRight::QUEENSIDE_WHITE,
             m_State.turn = Color::WHITE;
             m_State.enPassantIndex = UINT8_MAX;
-            m_State.halfMoves = 0;
             m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
+            ComputePSTScore();
             return;
         }
 
@@ -142,7 +140,7 @@ namespace libjupiter {
         // Read half-move counter 
         {
             const FenView& v = views[11];
-            auto res = std::from_chars(&fen[v.start], &fen[v.end], m_State.halfMoves);
+            auto res = std::from_chars(&fen[v.start], &fen[v.end], m_HalfMoves);
             if (res.ec != std::errc())
                 throw JupiterException(std::string("Bad half move counter in FEN string: ") + fen);
         }
@@ -158,11 +156,31 @@ namespace libjupiter {
         // Save initial board state to history
         m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
         m_History.Push(m_State);
+        ComputePSTScore();
     }
 
     Board::~Board()
     {
         JUPITER_PROFILING_END();
+    }
+
+    // Now doing incremental updates so need to initialise it
+    void Board::ComputePSTScore()
+    {
+        JUPITER_TRACE();
+        JUPITER_PROFILE();
+
+        m_State.pstScore = PSTScore(0, 0);
+        for (Color::Value color : { Color::WHITE, Color::BLACK }) {
+            for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
+                Bitboard occupancy = m_State.pieces.OccupancyMask(color, piece);
+                while (occupancy) {
+                    uint8_t index = std::countr_zero(occupancy);
+                    m_State.pstScore += m_PieceSquareTables.Get(color, piece, index);
+                    occupancy &= (occupancy - 1);
+                }
+            }
+        }
     }
 
     void Board::SetTimeControl(uint64_t seconds, uint64_t increment)
@@ -193,6 +211,7 @@ namespace libjupiter {
         m_Searcher.MakeMove(m_State, move);
         m_History.Push(m_State);
 
+        m_HalfMoves++;
         if (m_State.turn == Color::WHITE)
             m_FullMoves++;
     }
@@ -272,7 +291,7 @@ namespace libjupiter {
         m_State.rights = CastlingRights{};
         m_State.turn = Color::WHITE;
         m_State.enPassantIndex = UINT8_MAX;
-        m_State.halfMoves = 0;
+        m_HalfMoves = 0;
         m_FullMoves = 1;
     }
 

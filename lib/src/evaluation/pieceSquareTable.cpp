@@ -148,16 +148,16 @@ PieceSquareTables::PieceSquareTables()
     };
 }
 
-int64_t PieceSquareTables::Get(Color::Value color, Piece::Value piece, uint8_t index, float phase) const
+PSTScore PieceSquareTables::Get(Color::Value color, Piece::Value piece, uint8_t index) const 
 {
     JUPITER_TRACE();
 
-    float endgameWeight = phase;
-    float midgameWeight = 1.0 - phase;
-
     // Invert table if black
-    if (color == Color::BLACK)
-        index = 63 - index;
+    int64_t mult = 1;
+    if (color == Color::BLACK) {
+        index ^= 56ul;
+        mult = -1;
+    }
 
-    return m_Tables[piece].midgameTable[index] * midgameWeight + m_Tables[piece].endgameTable[index] * endgameWeight;
+    return PSTScore(m_Tables[piece].midgameTable[index] * mult, m_Tables[piece].endgameTable[index] * mult);
 }

@@ -12,11 +12,11 @@ using OpeningMoves = Buffer<std::pair<Move, uint16_t>, 5>;
 class OpeningBook {
 public:
     OpeningBook();
-    bool LookupMoves(const BoardState& state, OpeningMoves& moves);
+    bool LookupMoves(const BoardState& state, OpeningMoves& moves) const;
 
 private:
-    std::pair<Move, uint16_t> ParseMove(const BoardState& state, uint64_t bits);
-    ZobristKey ZobristHash(const BoardState& state);
+    std::pair<Move, uint16_t> ParseMove(const BoardState& state, uint64_t bits) const;
+    ZobristKey ZobristHash(const BoardState& state) const;
 
 private: 
     std::vector<uint8_t> m_Bytes;

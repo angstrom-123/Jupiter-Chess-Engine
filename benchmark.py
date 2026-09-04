@@ -91,9 +91,9 @@ def main():
             print("Invalid comparison filename")
             return
 
-    PLAY_DEPTH = 8
+    PLAY_DEPTH = 6
 
-    with open("profiles/fen.txt", "r") as f:
+    with open("fen.txt", "r") as f:
         telemetry: list[str] = []
         metrics: list[str] = []
         lines: list[str] = f.readlines()
@@ -105,7 +105,7 @@ def main():
             for j in range(PLAY_DEPTH):
                 print(f"\rLoading: {progress_bar(i * PLAY_DEPTH + j, len(lines) * PLAY_DEPTH)}", end="")
                 n_processed += 1
-                move = board.go(60 * 1000)
+                move = board.go(20 * 1000)
                 telemetry.append(board.get_telemetry())
 
                 if move is None:

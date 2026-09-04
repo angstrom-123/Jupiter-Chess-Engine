@@ -73,6 +73,12 @@ struct Piece {
         }
     }
 };
+inline Piece::Value operator++(Piece::Value& value, int)
+{
+    Piece::Value original = value;
+    value = static_cast<Piece::Value>(static_cast<uint8_t>(value) + 1);
+    return original;
+}
 
 using CastlingRights = uint8_t;
 struct CastlingRight {

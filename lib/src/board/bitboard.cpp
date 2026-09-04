@@ -125,9 +125,9 @@ Piece::Value BitboardSet::PieceInSquare(Color::Value color, uint8_t index) const
 
     if (Has(index)) {
         uint64_t bit = 1ul << index;
-        for (uint8_t piece = 0; piece < Piece::MAX_ENUM; piece++) {
+        for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
             if (m_Bits[color][piece] & bit)
-                return static_cast<Piece::Value>(piece);
+                return piece;
         }
     }
     return Piece::Invalid();
@@ -139,10 +139,10 @@ std::pair<Color::Value, Piece::Value> BitboardSet::PieceInSquare(uint8_t index) 
 
     if (Has(index)) {
         uint64_t bit = 1ul << index;
-        for (uint8_t color = 0; color < Color::MAX_ENUM; color++) {
-            for (uint8_t piece = 0; piece < Piece::MAX_ENUM; piece++) {
+        for (const Color::Value color : { Color::WHITE, Color::BLACK }) {
+            for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
                 if (m_Bits[color][piece] & bit)
-                    return std::make_pair(static_cast<Color::Value>(color), static_cast<Piece::Value>(piece));
+                    return std::make_pair(color, piece);
             }
         }
     }
@@ -210,8 +210,8 @@ void BitboardSet::Dump() const
         INFO(ss.str());
     };
 
-    for (Color::Value color = Color::WHITE; color < Color::MAX_ENUM; color = static_cast<Color::Value>(color + 1)) {
-        for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece = static_cast<Piece::Value>(piece + 1)) {
+    for (const Color::Value color : { Color::WHITE, Color::BLACK }) {
+        for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
             INFO(Color::Show(color) << " " << Piece::Show(piece) << ":");
             DisplayBitboard(m_Bits[color][piece]);
         }
@@ -231,9 +231,9 @@ void BitboardSet::Validate() const
     if ((m_Combined[Color::WHITE] & m_Combined[Color::BLACK]) == 0)
         return;
         
-    for (Piece::Value whitePiece = Piece::PAWN; whitePiece < Piece::MAX_ENUM; whitePiece = static_cast<Piece::Value>(whitePiece + 1)) {
+    for (Piece::Value whitePiece = Piece::PAWN; whitePiece < Piece::MAX_ENUM; whitePiece++) {
         for (std::size_t i = 0; i < 64; i++) {
-            for (Piece::Value blackPiece = Piece::PAWN; blackPiece < Piece::MAX_ENUM; blackPiece = static_cast<Piece::Value>(blackPiece + 1)) {
+            for (Piece::Value blackPiece = Piece::PAWN; blackPiece < Piece::MAX_ENUM; blackPiece++) {
                 uint64_t bit = 1ul << i;
                 if ((m_Bits[Color::WHITE][whitePiece] & bit) && (m_Bits[Color::BLACK][blackPiece] & bit)) {
                     Dump();

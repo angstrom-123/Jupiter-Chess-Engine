@@ -15,8 +15,8 @@
 #include <bit>
 #include <utility>
 
-Searcher::Searcher(Zobrist& zobrist, OpeningBook& openingBook)
-    : m_Zobrist(zobrist), m_OpeningBook{openingBook} 
+Searcher::Searcher(Zobrist& zobrist, OpeningBook& openingBook, PieceSquareTables& pieceSquareTables)
+    : m_Zobrist{std::forward<const Zobrist>(zobrist)}, m_OpeningBook{std::forward<const OpeningBook>(openingBook)}, m_PieceSquareTables{std::forward<const PieceSquareTables>(pieceSquareTables)} 
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -425,24 +425,28 @@ MoveData Searcher::MakeMove(BoardState& state, Move move)
         .turn = state.turn,
         .enPassantIndex = state.enPassantIndex,
         .fiftyMoveCounter = state.fiftyMoveCounter,
-        .halfMoves = state.halfMoves
+        .pstScore = state.pstScore,
     };
 
     // Move piece
     state.pieces.Unset(friendly, move.piece, move.from);
     state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, move.piece, move.from);
+    state.pstScore -= m_PieceSquareTables.Get(friendly, move.piece, move.from);
     if (Piece::IsValid(move.promote)) {
         state.pieces.Set(friendly, move.promote, move.to);
         state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, move.promote, move.to);
+        state.pstScore += m_PieceSquareTables.Get(friendly, move.promote, move.to);
     } else {
         state.pieces.Set(friendly, move.piece, move.to);
         state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, move.piece, move.to);
+        state.pstScore += m_PieceSquareTables.Get(friendly, move.piece, move.to);
     }
 
     // Remove capture
     if (Piece::IsValid(capture)) {
         state.pieces.Unset(enemy, capture, move.to);
         state.zobristKey ^= m_Zobrist.ValueForPiece(enemy, capture, move.to);
+        state.pstScore -= m_PieceSquareTables.Get(enemy, capture, move.to);
     }
 
     // Move rook if castling
@@ -450,13 +454,19 @@ MoveData Searcher::MakeMove(BoardState& state, Move move)
         if (move.from > move.to) {
             state.pieces.Unset(friendly, Piece::ROOK, move.from - 4);
             state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, Piece::ROOK, move.from - 4);
+            state.pstScore -= m_PieceSquareTables.Get(friendly, Piece::ROOK, move.from - 4);
+
             state.pieces.Set(friendly, Piece::ROOK, move.from - 1);
             state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, Piece::ROOK, move.from - 1);
+            state.pstScore += m_PieceSquareTables.Get(friendly, Piece::ROOK, move.from - 1);
         } else {
             state.pieces.Unset(friendly, Piece::ROOK, move.from + 3);
             state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, Piece::ROOK, move.from + 3);
+            state.pstScore -= m_PieceSquareTables.Get(friendly, Piece::ROOK, move.from + 3);
+
             state.pieces.Set(friendly, Piece::ROOK, move.from + 1);
             state.zobristKey ^= m_Zobrist.ValueForPiece(friendly, Piece::ROOK, move.from + 1);
+            state.pstScore += m_PieceSquareTables.Get(friendly, Piece::ROOK, move.from + 1);
         }
     }
 
@@ -465,6 +475,7 @@ MoveData Searcher::MakeMove(BoardState& state, Move move)
         uint8_t pawnIndex = (friendly == Color::WHITE) ? move.to + 8 : move.to - 8;
         state.pieces.Unset(enemy, Piece::PAWN, pawnIndex);
         state.zobristKey ^= m_Zobrist.ValueForPiece(enemy, Piece::PAWN, pawnIndex);
+        state.pstScore -= m_PieceSquareTables.Get(enemy, Piece::PAWN, pawnIndex);
     }
 
     // Avoid updating castling rights after both sides lose the right
@@ -528,8 +539,6 @@ MoveData Searcher::MakeMove(BoardState& state, Move move)
     state.turn = enemy;
     state.zobristKey ^= m_Zobrist.ValueForTurn(friendly);
     state.zobristKey ^= m_Zobrist.ValueForTurn(enemy);
-
-    state.halfMoves++;
 
     return moveData;
 }
@@ -642,9 +651,9 @@ void Searcher::UnmakeMove(BoardState& state, MoveData moveData)
     state.rights = moveData.rights;
     state.turn = moveData.turn;
     state.enPassantIndex = moveData.enPassantIndex;
-    state.halfMoves = moveData.halfMoves;
     state.fiftyMoveCounter = moveData.fiftyMoveCounter;
     state.zobristKey = moveData.zobristKey;
+    state.pstScore = PSTScore{moveData.pstScore};
 }
 
 bool Searcher::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::Value color)

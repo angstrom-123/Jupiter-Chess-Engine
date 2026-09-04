@@ -2,6 +2,7 @@
 
 #include "board/bitboard.h"
 #include "board/zobrist.h"
+#include "evaluation/pieceSquareTable.h"
 
 class BoardState {
 public:
@@ -10,6 +11,6 @@ public:
     CastlingRights rights{0};
     Color::Value turn{Color::WHITE};
     uint8_t enPassantIndex{UINT8_MAX};
-    uint16_t halfMoves{0};
     uint8_t fiftyMoveCounter{0};
+    PSTScore pstScore{PSTScore(0, 0)};
 };
