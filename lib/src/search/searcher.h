@@ -16,6 +16,9 @@
 
 using LineBuffer = Buffer<Move, MAX_PLY>;
 
+constexpr uint16_t PLY_UNIT = 64;
+constexpr uint16_t HALF_PLY_UNIT = PLY_UNIT / 2;
+
 class Searcher {
 public:
     Searcher(Zobrist& zobrist, OpeningBook& openingBook, PieceSquareTables& pieceSquareTables);
@@ -38,19 +41,22 @@ public:
 private:
     void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv);
     bool IsCheckmate(const BoardState& state);
-    uint64_t CalculateSearchTime(const BoardState& state, uint64_t msRemaining);
+    void CalculateSearchTime(ExecutionTimer timer, uint64_t msRemaining);
     Move PickOpeningMove(const BoardState& state);
     void UnmakeMove(BoardState& state, MoveData moveData);
-    int64_t Search(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, uint8_t depth, uint8_t ply, uint64_t targetMs);
-    int64_t Quiesce(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, uint8_t ply, uint64_t targetMs);
+    int64_t Search(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, int16_t depthUnits, uint8_t ply);
+    int64_t Quiesce(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, uint8_t ply);
     bool SquareUnderAttack(const BoardState& state, uint64_t bit, Color::Value color);
     bool WasLegal(const BoardState& state, MoveData moveData);
+    bool IsCheck(const BoardState& state);
 
 private:
     uint64_t m_TimeControlSeconds{0};
     uint64_t m_TimeControlIncrement{0};
     bool m_SearchAborted{false};
     bool m_InOpeningBook{true};
+    uint64_t m_SoftSearchBound{0};
+    uint64_t m_HardSearchBound{0};
     Buffer<KillerMoveBuffer, MAX_PLY> m_Killers;
     RomuMonoRandom m_FastRNG{RomuMonoRandom(time(nullptr))};
     AttackTable m_AttackTable{AttackTable()};

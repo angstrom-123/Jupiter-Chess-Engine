@@ -9,6 +9,7 @@ Move MoveStream::Stream(bool quiescenceMode)
     JUPITER_PROFILE();
 
     m_LastWasQuiet = false;
+    m_LastWasBadAttack = false;
 
     switch (m_StreamState) {
         case StreamState::NONE:
@@ -45,6 +46,7 @@ Move MoveStream::Stream(bool quiescenceMode)
                 const Move& move = (*m_Killers)[m_KillerIndex++];
 
                 // Only return the killer move if pseudolegal
+                // Specifically don't set quiet move flag because killers are special cases
                 if (move.IsValid() && m_State.pieces.PieceInSquare(move.from).second == move.piece)
                     return move;
             }
@@ -70,8 +72,10 @@ Move MoveStream::Stream(bool quiescenceMode)
         case StreamState::BAD_ATTACKS:
             while (m_AttacksIndex < m_Attacks.Size()) {
                 const Move& move = m_Attacks[m_AttacksIndex++];
-                if (move != m_BestMove)
+                if (move != m_BestMove) {
+                    m_LastWasBadAttack = false;
                     return move;
+                }
             }
 
             m_StreamState = StreamState::FINISHED;
@@ -81,12 +85,6 @@ Move MoveStream::Stream(bool quiescenceMode)
             return Move::Invalid();
     };
 }
-
-bool MoveStream::LastWasQuiet() const
-{
-    return m_LastWasQuiet;
-}
-
 
 static const uint8_t MVV_LVA_TABLE[Piece::MAX_ENUM + 1][Piece::MAX_ENUM + 1] = {
     { 10, 11, 12, 13, 14, 15, 0 }, // victim P, attacker K, Q, R, B, N, P, None

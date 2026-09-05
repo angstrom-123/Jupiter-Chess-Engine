@@ -47,7 +47,8 @@ public:
             m_BestMove{bestMove} {}
 
     Move Stream(bool attackMode = false);
-    bool LastWasQuiet() const;
+    bool LastWasQuiet() const { return m_LastWasQuiet; }
+    bool LastWasBadAttack() const { return m_LastWasBadAttack; }
 
 private:
     void OrderAttacks();
@@ -68,4 +69,5 @@ private:
     std::size_t m_QuietsIndex{0};
     std::size_t m_KillerIndex{0};
     bool m_LastWasQuiet{false};
+    bool m_LastWasBadAttack{false};
 };
