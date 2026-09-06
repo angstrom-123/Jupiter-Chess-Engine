@@ -44,8 +44,8 @@ private:
     void CalculateSearchTime(ExecutionTimer timer, uint64_t msRemaining);
     Move PickOpeningMove(const BoardState& state);
     void UnmakeMove(BoardState& state, MoveData moveData);
-    int64_t Search(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, int16_t depthUnits, uint8_t ply);
-    int64_t Quiesce(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, uint8_t ply);
+    int32_t Search(BoardState& state, History& history, ExecutionTimer timer, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t ply);
+    int32_t Quiesce(BoardState& state, History& history, ExecutionTimer timer, int32_t alpha, int32_t beta, uint8_t ply);
     bool SquareUnderAttack(const BoardState& state, uint64_t bit, Color::Value color);
     bool WasLegal(const BoardState& state, MoveData moveData);
     bool IsCheck(const BoardState& state);

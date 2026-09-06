@@ -7,7 +7,7 @@
 #include <cmath>
 #include <cstdint>
 
-int64_t Evaluator::Evaluate(const BoardState& state) const
+int32_t Evaluator::Evaluate(const BoardState& state) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -18,7 +18,7 @@ int64_t Evaluator::Evaluate(const BoardState& state) const
 
     bool isMaterialDraw = false;
     int64_t counts[Color::MAX_ENUM][Piece::MAX_ENUM] = {};
-    int64_t materialBalance = MaterialBalance(std::forward<const BoardState>(state), counts, isMaterialDraw);
+    int32_t materialBalance = MaterialBalance(std::forward<const BoardState>(state), counts, isMaterialDraw);
     
     // Draw by lack of material
     if (isMaterialDraw)
@@ -26,7 +26,7 @@ int64_t Evaluator::Evaluate(const BoardState& state) const
 
     float phase = GamePhase(std::forward<const BoardState>(state));
 
-    int64_t eval = materialBalance;
+    int32_t eval = materialBalance;
     eval += PiecePositions(std::forward<const BoardState>(state), phase);
     eval += Mobility(std::forward<const BoardState>(state));
     eval += Mopup(std::forward<const BoardState>(state), materialBalance, phase);
@@ -37,12 +37,12 @@ int64_t Evaluator::Evaluate(const BoardState& state) const
 }
 
 // Since this function already needs to count all pieces, can check for material draw here
-int64_t Evaluator::MaterialBalance(const BoardState& state, int64_t (& pieceCounts)[Color::MAX_ENUM][Piece::MAX_ENUM], bool& isMaterialDraw) const
+int32_t Evaluator::MaterialBalance(const BoardState& state, int64_t (& pieceCounts)[Color::MAX_ENUM][Piece::MAX_ENUM], bool& isMaterialDraw) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    int64_t materialEval = 0;
+    int32_t materialEval = 0;
 
     Color::Value friendly = state.turn;
     Color::Value enemy = Color::Opposite(state.turn);
@@ -91,7 +91,7 @@ int64_t Evaluator::MaterialBalance(const BoardState& state, int64_t (& pieceCoun
     return materialEval;
 }
 
-int64_t Evaluator::PiecePositions(const BoardState& state, float phase) const
+int32_t Evaluator::PiecePositions(const BoardState& state, float phase) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -100,15 +100,15 @@ int64_t Evaluator::PiecePositions(const BoardState& state, float phase) const
     return (relativeScore.midgame * (1.0 - phase)) + (relativeScore.endgame * phase);
 }
 
-int64_t Evaluator::Mopup(const BoardState& state, int64_t materialBalance, float phase) const 
+int32_t Evaluator::Mopup(const BoardState& state, int32_t materialBalance, float phase) const 
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    int64_t mopupEval = 0;
+    int32_t mopupEval = 0;
 
-    const int64_t PROXIMITY_FACTOR = 4;
-    const int64_t EDGE_FACTOR = 10;
+    const int32_t PROXIMITY_FACTOR = 4;
+    const int32_t EDGE_FACTOR = 10;
 
     // Only mopup if up material and near to endgame
     if (phase > 0.6 && materialBalance >= Piece::Evaluate(Piece::PAWN)) {
@@ -126,7 +126,7 @@ int64_t Evaluator::Mopup(const BoardState& state, int64_t materialBalance, float
     return mopupEval * phase;
 }
 
-int64_t Evaluator::KingSafety(const BoardState& state, float phase) const 
+int32_t Evaluator::KingSafety(const BoardState& state, float phase) const 
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -136,9 +136,9 @@ int64_t Evaluator::KingSafety(const BoardState& state, float phase) const
     if (phase >= MAX_PHASE)
         return 0;
 
-    int64_t safetyEval = 0;
+    int32_t safetyEval = 0;
 
-    Movegen movegen(state, m_AttackTable);
+    Movegen movegen(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
     Bitboard kingBit = state.pieces.OccupancyMask(state.turn, Piece::KING);
     uint8_t kingIndex = std::countr_zero(kingBit);
     uint8_t kingFile = kingIndex & 7;
@@ -146,8 +146,8 @@ int64_t Evaluator::KingSafety(const BoardState& state, float phase) const
 
     // King mobility penalty
     {
-        int64_t kingMobilityEval = 0;
-        const int64_t KING_MOBILITY_FACTOR = -20;
+        int32_t kingMobilityEval = 0;
+        const int32_t KING_MOBILITY_FACTOR = -20;
 
         // Imagine a friendly queen where the king is and see how much it can move
         AttackMoveBuffer attacks;
@@ -165,8 +165,8 @@ int64_t Evaluator::KingSafety(const BoardState& state, float phase) const
 
     // Pawn shield
     {
-        int64_t pawnShieldEval = 0;
-        const int64_t PAWN_SHIELD_FACTOR = -20;
+        int32_t pawnShieldEval = 0;
+        const int32_t PAWN_SHIELD_FACTOR = -20;
 
         // Determine where the shield should be based on king position and color
         Bitboard shieldMask = 0;
@@ -200,37 +200,30 @@ int64_t Evaluator::KingSafety(const BoardState& state, float phase) const
     return safetyEval;
 }
 
-int64_t Evaluator::Mobility(const BoardState& state) const 
+int32_t Evaluator::Mobility(const BoardState& state) const 
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    const int64_t MOBILITY_FACTOR = 5;
+    const int32_t MOBILITY_FACTOR = 5;
 
-    Movegen movegen(state, m_AttackTable);
-
-    AttackMoveBuffer attacks;
-    movegen.FindAllAttacks(attacks);
-
-    QuietMoveBuffer quiets;
-    movegen.FindAllQuiets(quiets);
-
-    return (attacks.Size() + quiets.Size()) * MOBILITY_FACTOR;
+    Movegen movegen(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
+    return (movegen.CountAllAttacks() + movegen.CountAllQuiets()) * MOBILITY_FACTOR;
 }
 
-int64_t Evaluator::PawnStructure(const BoardState& state) const 
+int32_t Evaluator::PawnStructure(const BoardState& state) const 
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    int64_t structureEval = 0;
+    int32_t structureEval = 0;
 
     Bitboard fileMask = 0b10000000'10000000'10000000'10000000'10000000'10000000'10000000'10000000;
 
     // Doubled pawns
     {
-        int64_t doubledEval = 0;
-        const int64_t DOUBLED_FACTOR = -10;
+        int32_t doubledEval = 0;
+        const int32_t DOUBLED_FACTOR = -10;
 
         for (std::size_t i = 0; i < 8; i++) {
             Bitboard filePawns = state.pieces.OccupancyMask(state.turn, Piece::PAWN) & (fileMask >> i);
@@ -287,7 +280,7 @@ float Evaluator::GamePhase(const BoardState& state) const
     return 1.0 - (static_cast<float>(currentPhase) / static_cast<float>(MAX_PHASE));
 }
 
-int64_t Evaluator::SEE(const BoardState& state, Move move) const
+int32_t Evaluator::SEE(const BoardState& state, Move move) const
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -304,7 +297,7 @@ int64_t Evaluator::SEE(const BoardState& state, Move move) const
     pieces.Unset(state.turn, move.piece, move.from);
     pieces.Set(state.turn, move.piece, move.to);
 
-    Buffer<int64_t, 16> gain;
+    Buffer<int32_t, 16> gain;
     gain.PushBack(Piece::Evaluate(firstCapture));
 
     // TODO: Don't recalculate attackers at each iteration, just update the bitboards 
@@ -319,8 +312,12 @@ int64_t Evaluator::SEE(const BoardState& state, Move move) const
         Bitboard attackers[Color::MAX_ENUM][Piece::MAX_ENUM];
         for (const Color::Value friendly : { Color::WHITE, Color::BLACK }) {
             Color::Value opponent = Color::Opposite(friendly);
-            for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++)
-                attackers[friendly][piece] = m_AttackTable.GetAttacks(move.to, piece, opponent, pieces.OccupancyMask()) & pieces.OccupancyMask(friendly, piece);
+            attackers[friendly][Piece::PAWN] = m_AttackTable.GetPawnAttacks(move.to, opponent) & pieces.OccupancyMask(friendly, Piece::PAWN);
+            attackers[friendly][Piece::KNIGHT] = m_AttackTable.GetKnightAttacks(move.to) & pieces.OccupancyMask(friendly, Piece::KNIGHT);
+            attackers[friendly][Piece::BISHOP] = m_AttackTable.GetBishopAttacks(move.to, pieces.OccupancyMask()) & pieces.OccupancyMask(friendly, Piece::BISHOP);
+            attackers[friendly][Piece::ROOK] = m_AttackTable.GetRookAttacks(move.to, pieces.OccupancyMask()) & pieces.OccupancyMask(friendly, Piece::ROOK);
+            attackers[friendly][Piece::QUEEN] = m_AttackTable.GetQueenAttacks(move.to, pieces.OccupancyMask()) & pieces.OccupancyMask(friendly, Piece::QUEEN);
+            attackers[friendly][Piece::KING] = m_AttackTable.GetKingAttacks(move.to) & pieces.OccupancyMask(friendly, Piece::KING);
         }
 
         // Find least valuable attacker

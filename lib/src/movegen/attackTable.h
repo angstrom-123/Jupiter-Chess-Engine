@@ -23,9 +23,12 @@ struct SliderData {
 class AttackTable {
 public:
     AttackTable();
-
-    // NOTE: Occupancy bitboard only considered for sliding pieces
-    [[nodiscard]] Bitboard GetAttacks(uint8_t index, Piece::Value piece, Color::Value color, Bitboard occupancy) const;
+    Bitboard GetPawnAttacks(uint8_t index, Color::Value color) const;
+    Bitboard GetKnightAttacks(uint8_t index) const;
+    Bitboard GetBishopAttacks(uint8_t index, Bitboard occupancy) const;
+    Bitboard GetRookAttacks(uint8_t index, Bitboard occupancy) const;
+    Bitboard GetQueenAttacks(uint8_t index, Bitboard occupancy) const;
+    Bitboard GetKingAttacks(uint8_t index) const;
 
 private:
     void SerializeMagics(const fs::path& path);

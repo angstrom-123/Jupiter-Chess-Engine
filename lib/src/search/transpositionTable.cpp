@@ -1,4 +1,5 @@
 #include "transpositionTable.h"
+#include <cassert>
 #include <cstring>
 #include "util/instrumenter.h"
 
@@ -10,8 +11,8 @@ TranspositionTable::TranspositionTable()
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    m_Table = new TableEntry[TRANSPOSITION_TABLE_SIZE];
-    std::memset(m_Table, 0, TRANSPOSITION_TABLE_SIZE * sizeof(TableEntry));
+    m_Table = new PackedTableEntry[TRANSPOSITION_TABLE_SIZE];
+    std::memset(m_Table, 0, TRANSPOSITION_TABLE_SIZE * sizeof(PackedTableEntry));
 }
 
 TranspositionTable::~TranspositionTable()
@@ -25,31 +26,32 @@ TableEntry TranspositionTable::Get(ZobristKey key)
     JUPITER_PROFILE();
 
     uint64_t index = Index(key);
-    const TableEntry& entry = m_Table[index];
+    const PackedTableEntry& entry = m_Table[index];
     if (entry.hash == key)
-        return entry;
+        return TableEntry(entry);
     return TableEntry::Invalid();
 }
 
-void TranspositionTable::Save(const BoardState& state, int64_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
+void TranspositionTable::Save(const BoardState& state, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
     uint64_t index = Index(state.zobristKey);
-    const TableEntry& oldEntry = m_Table[index];
+    const PackedTableEntry& oldEntry = m_Table[index];
 
     if (!oldEntry.IsValid()) {
         m_Occupancy++;
-        m_Table[index] = TableEntry(state.zobristKey, score, bestMove, depth, nodeType);
+        m_Table[index] = PackedTableEntry(state.zobristKey, score, depth, bestMove, nodeType);
         return;
     }
 
 #if ALWAYS_OVERWRITE
-    m_Table[index] = TableEntry(state.zobristKey, score, bestMove, depth, nodeType);
+    m_Table[index] = PackedTableEntry(state.zobristKey, score, depth, bestMove, nodeType);
 #elif PREFER_DEPTH 
-    if (depth >= oldEntry.depth)
-        m_Table[index] = TableEntry(state.zobristKey, score, bestMove, depth, nodeType);
+    TableEntry oldEntryUnpacked(oldEntry);
+    if (depth >= oldEntryUnpacked.depth)
+        m_Table[index] = PackedTableEntry(state.zobristKey, score, depth, bestMove, nodeType);
 #endif
 }
 

@@ -31,7 +31,7 @@ void BitboardSet::Set(Color::Value color, Piece::Value piece, uint8_t index)
 {
     JUPITER_TRACE();
 
-    uint64_t bit = 1ul << index;
+    uint64_t bit = 1ull << index;
     m_Bits[color][piece] |= bit;
     m_Combined[color] |= bit;
 }
@@ -40,7 +40,7 @@ void BitboardSet::Unset(Color::Value color, Piece::Value piece, uint8_t index)
 {
     JUPITER_TRACE();
 
-    uint64_t bit = 1ul << index;
+    uint64_t bit = 1ull << index;
     m_Bits[color][piece] &= ~bit;
     m_Combined[color] &= ~bit;
 }
@@ -49,7 +49,7 @@ void BitboardSet::UnsetAll(Color::Value color, uint8_t index)
 {
     JUPITER_TRACE();
 
-    uint64_t bit = 1ul << index;
+    uint64_t bit = 1ull << index;
     if (m_Combined[color] & bit) {
         m_Bits[color][Piece::PAWN] &= ~bit;
         m_Bits[color][Piece::KNIGHT] &= ~bit;
@@ -66,10 +66,10 @@ void BitboardSet::Clear()
     JUPITER_TRACE();
 
     for (auto& board : m_Bits[Color::WHITE]) 
-        board = 0ul;
+        board = 0ull;
 
     for (auto& board : m_Bits[Color::BLACK])
-        board = 0ul;
+        board = 0ull;
 }
 
 bool BitboardSet::Has(Color::Value color, Piece::Value piece, uint8_t index) const
@@ -80,7 +80,7 @@ bool BitboardSet::Has(Color::Value color, Piece::Value piece, uint8_t index) con
       "lib/src/bitboard.cpp",
       74);
 
-  uint64_t bit = 1ul << index;
+  uint64_t bit = 1ull << index;
   return m_Bits[color][piece] & bit;
 }
 
@@ -88,7 +88,7 @@ bool BitboardSet::Has(Color::Value color, uint8_t index) const
 {
     JUPITER_TRACE();
 
-    uint64_t bit = 1ul << index;
+    uint64_t bit = 1ull << index;
     return m_Combined[color] & bit;
 }
 
@@ -96,7 +96,7 @@ bool BitboardSet::Has(uint8_t index) const
 {
     JUPITER_TRACE();
 
-    uint64_t bit = 1ul << index;
+    uint64_t bit = 1ull << index;
     return (m_Combined[Color::WHITE] | m_Combined[Color::BLACK]) & bit;
 }
 
@@ -104,11 +104,11 @@ bool BitboardSet::HasAny(const std::initializer_list<std::size_t>& indices) cons
 {
     JUPITER_TRACE();
 
-    for (const uint8_t index : indices) {
-        uint64_t bit = 1ul << index;
-        if ((m_Combined[Color::WHITE] | m_Combined[Color::BLACK]) & bit)
-            return true;
-    }
+    Bitboard combined = 0;
+    for (const std::size_t index : indices)
+        combined |= (1ull << index);
+
+    return (m_Combined[Color::WHITE] | m_Combined[Color::BLACK]) & combined;
     return false;
 }
 
@@ -123,8 +123,8 @@ Piece::Value BitboardSet::PieceInSquare(Color::Value color, uint8_t index) const
 {
     JUPITER_TRACE();
 
-    if (Has(index)) {
-        uint64_t bit = 1ul << index;
+    if (Has(color, index)) {
+        uint64_t bit = 1ull << index;
         for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
             if (m_Bits[color][piece] & bit)
                 return piece;
@@ -138,7 +138,7 @@ std::pair<Color::Value, Piece::Value> BitboardSet::PieceInSquare(uint8_t index) 
     JUPITER_TRACE();
 
     if (Has(index)) {
-        uint64_t bit = 1ul << index;
+        uint64_t bit = 1ull << index;
         for (const Color::Value color : { Color::WHITE, Color::BLACK }) {
             for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
                 if (m_Bits[color][piece] & bit)
@@ -204,7 +204,7 @@ void BitboardSet::Dump() const
             if (i % 8 == 0)
                 ss << std::endl;
 
-            ss << ((bitboard & (1ul << i)) ? "x " : ". ");
+            ss << ((bitboard & (1ull << i)) ? "x " : ". ");
         }
         ss << std::endl;
         INFO(ss.str());
@@ -234,7 +234,7 @@ void BitboardSet::Validate() const
     for (Piece::Value whitePiece = Piece::PAWN; whitePiece < Piece::MAX_ENUM; whitePiece++) {
         for (std::size_t i = 0; i < 64; i++) {
             for (Piece::Value blackPiece = Piece::PAWN; blackPiece < Piece::MAX_ENUM; blackPiece++) {
-                uint64_t bit = 1ul << i;
+                uint64_t bit = 1ull << i;
                 if ((m_Bits[Color::WHITE][whitePiece] & bit) && (m_Bits[Color::BLACK][blackPiece] & bit)) {
                     Dump();
                     Show();

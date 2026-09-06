@@ -333,7 +333,7 @@ std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64
     Move move = {
         .from = fromIndex,
         .to = toIndex,
-        .piece = state.pieces.PieceInSquare(fromIndex).second,
+        .piece = state.pieces.PieceInSquare(state.turn, fromIndex),
         .promote = mapping[promote],
     };
 
@@ -407,8 +407,8 @@ ZobristKey OpeningBook::ZobristHash(const BoardState& state) const
         uint8_t file = state.enPassantIndex & 7;
         uint8_t square = 8 * (state.turn == Color::WHITE ? 3 : 4) + file;
         uint64_t adjacentMask = 0;
-        if (file > 0) adjacentMask |= (1ul << (square - 1));
-        if (file < 7) adjacentMask |= (1ul << (square + 1));
+        if (file > 0) adjacentMask |= (1ull << (square - 1));
+        if (file < 7) adjacentMask |= (1ull << (square + 1));
         if (adjacentMask & state.pieces.OccupancyMask(state.turn, Piece::PAWN))
             key ^= randoms[offset + file];
     }

@@ -18,7 +18,7 @@ Move MoveStream::Stream(bool quiescenceMode)
             m_StreamState = StreamState::GOOD_ATTACKS;
 
             // Only return the best move if pseudolegal
-            if (m_BestMove.IsValid() && m_State.pieces.PieceInSquare(m_BestMove.from).second == m_BestMove.piece)
+            if (m_BestMove.IsValid() && m_State.pieces.PieceInSquare(m_State.turn, m_BestMove.from) == m_BestMove.piece)
                 return m_BestMove;
 
             // Fall through
@@ -47,7 +47,7 @@ Move MoveStream::Stream(bool quiescenceMode)
 
                 // Only return the killer move if pseudolegal
                 // Specifically don't set quiet move flag because killers are special cases
-                if (move.IsValid() && m_State.pieces.PieceInSquare(move.from).second == move.piece)
+                if (move.IsValid() && m_State.pieces.PieceInSquare(m_State.turn, move.from) == move.piece)
                     return move;
             }
 
@@ -96,22 +96,27 @@ static const uint8_t MVV_LVA_TABLE[Piece::MAX_ENUM + 1][Piece::MAX_ENUM + 1] = {
     { 0, 0, 0, 0, 0, 0, 0},        // victim _, attacker K, Q, R, B, N, P, None
 };
 
+// TODO: Try some alternatives because this is expensive (~15% in the sort) 
+//          - Could try to go through once and score them all 
+//          - Then can search for the highest score each time
+//          - This lets us terminate the "sort" early on a cutoff without finishing 
 void MoveStream::OrderAttacks()
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    std::sort(m_Attacks.begin(), m_Attacks.end(), [this](const Move& a, const Move& b) {
-        Piece::Value victimA = m_State.pieces.PieceInSquare(a.to).second;
+    Color::Value enemy = Color::Opposite(m_State.turn);
+    std::sort(m_Attacks.begin(), m_Attacks.end(), [this, enemy](const Move& a, const Move& b) {
+        Piece::Value victimA = m_State.pieces.PieceInSquare(enemy, a.to);
         if (!Piece::IsValid(victimA)) // In case of en passant
             victimA = Piece::PAWN;
-        Piece::Value aggressorA = m_State.pieces.PieceInSquare(a.from).second;
+        Piece::Value aggressorA = m_State.pieces.PieceInSquare(enemy, a.from);
         uint8_t scoreA = MVV_LVA_TABLE[victimA][aggressorA];
 
-        Piece::Value victimB = m_State.pieces.PieceInSquare(b.to).second;
+        Piece::Value victimB = m_State.pieces.PieceInSquare(enemy, b.to);
         if (!Piece::IsValid(victimB)) // In case of en passant
             victimB = Piece::PAWN;
-        Piece::Value aggressorB = m_State.pieces.PieceInSquare(b.from).second;
+        Piece::Value aggressorB = m_State.pieces.PieceInSquare(enemy, b.from);
         uint8_t scoreB = MVV_LVA_TABLE[victimB][aggressorB];
 
         return scoreA > scoreB;

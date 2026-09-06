@@ -10,7 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 string(APPEND CMAKE_CXX_FLAGS " -Wall -Wextra")
 string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O3 -g -DDEBUG")
 string(APPEND CMAKE_CXX_FLAGS_RELEASE " -O3 -DNOTRACE")
-string(APPEND CMAKE_CXX_FLAGS_PERF " -O3 -g -DNOTRACE")
+string(APPEND CMAKE_CXX_FLAGS_PERF " -O3 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls -DNOTRACE")
 string(APPEND CMAKE_CXX_FLAGS_PROFILE " -O3 -DPROFILE -DNOTRACE")
 
 find_package(Python3 COMPONENTS Development REQUIRED)

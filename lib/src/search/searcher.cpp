@@ -64,9 +64,9 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
 
         int16_t depthUnits = depth * PLY_UNIT;
 
-        int64_t alpha = -INT32_MAX;
-        int64_t beta = INT32_MAX;
-        int64_t bestScore = -INT32_MAX;
+        int32_t alpha = -INFINITY_EVAL;
+        int32_t beta = INFINITY_EVAL;
+        int32_t bestScore = -INFINITY_EVAL;
         Move bestMove = Move::Invalid();
 
         Move ttMove = Move::Invalid();
@@ -96,7 +96,7 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
 
             // Update state and search
             history.Push(state);
-            int64_t score = 0;
+            int32_t score = 0;
 
             int16_t reduction = 0;
             if (movegen.LastWasBadAttack()) // Reduce moves with negative SEE by one ply
@@ -164,12 +164,12 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
     return finalMove;
 }
 
-int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, int16_t depthUnits, uint8_t ply)
+int32_t Searcher::Search(BoardState& state, History& history, ExecutionTimer timer, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t ply)
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    int64_t startAlpha = alpha;
+    int32_t startAlpha = alpha;
 
     // Check if over time every 4096 nodes
     if ((nodesSearched & 4095) == 0 && timer.Now() >= m_SoftSearchBound) {
@@ -183,7 +183,7 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
 
     nodesSearched++;
 
-    int64_t bestScore = -INT32_MAX;
+    int32_t bestScore = -INFINITY_EVAL;
     Move bestMove = Move::Invalid();
 
     Move ttMove = Move::Invalid();
@@ -192,7 +192,7 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
         nodesLookedUp++;
         ttMove = entry.bestMove;
 
-        int64_t score = entry.score;
+        int32_t score = entry.score;
         if (entry.score > MATE_THRESHOLD)
             score -= ply;
         else if (entry.score < -MATE_THRESHOLD)
@@ -226,7 +226,7 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
 
         // Update state and search
         history.Push(state);
-        int64_t score = 0;
+        int32_t score = 0;
 
         int16_t reduction = 0;
         if (movegen.LastWasBadAttack()) // Reduce moves with negative SEE by one ply
@@ -289,7 +289,7 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
         nodeType = NodeType::UPPER_BOUND;
 
     // Score mate without ply in the TT if above the mate threshold
-    int64_t ttScore = bestScore;
+    int32_t ttScore = bestScore;
     if (bestScore > MATE_THRESHOLD)
         ttScore += ply;
     else if (bestScore < -MATE_THRESHOLD)
@@ -299,7 +299,7 @@ int64_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
     return bestScore;
 }
 
-int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer timer, int64_t alpha, int64_t beta, uint8_t ply)
+int32_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer timer, int32_t alpha, int32_t beta, uint8_t ply)
 {
     JUPITER_TRACE();
     JUPITER_PROFILE();
@@ -315,7 +315,7 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
 
     // Standing Pat is only an option when not in check
     bool inCheck = SquareUnderAttack(state, state.pieces.OccupancyMask(state.turn, Piece::KING), Color::Opposite(state.turn));
-    int64_t bestScore = (inCheck) ? -INT32_MAX : m_Eval.Evaluate(state);
+    int32_t bestScore = (inCheck) ? -INFINITY_EVAL : m_Eval.Evaluate(state);
 
     // Update search terms
     if (bestScore > alpha)
@@ -333,7 +333,7 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
     while ((move = movegen.Stream(!inCheck)).IsValid()) {
         // Delta pruning (only non-promotions when not in check)
         if (!inCheck && !Piece::IsValid(move.promote)) {
-            const int64_t DELTA_MARGIN = Piece::Evaluate(Piece::KNIGHT); // TODO: Probably want this value to be slightly higher?
+            const int32_t DELTA_MARGIN = Piece::Evaluate(Piece::KNIGHT); // TODO: Probably want this value to be slightly higher?
             Piece::Value capture = state.pieces.PieceInSquare(Color::Opposite(state.turn), move.to);
             if (!Piece::IsValid(capture)) // en passant
                 capture = Piece::PAWN;
@@ -354,7 +354,7 @@ int64_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
 
         // Update state and search
         history.Push(state);
-        int64_t score = 0;
+        int32_t score = 0;
         if (!history.IsRepetition()) {
             if (isFirstMove) {
                 // First (assumed best) move searched with full window
@@ -426,10 +426,9 @@ MoveData Searcher::MakeMove(BoardState& state, Move move)
     JUPITER_TRACE();
     JUPITER_PROFILE();
 
-    Piece::Value capture = state.pieces.PieceInSquare(move.to).second;
-
     Color::Value friendly = state.turn;
     Color::Value enemy = Color::Opposite(state.turn);
+    Piece::Value capture = state.pieces.PieceInSquare(enemy, move.to);
 
     // For unmaking the move later
     MoveData moveData = {
@@ -537,8 +536,8 @@ MoveData Searcher::MakeMove(BoardState& state, Move move)
         uint8_t enPassantIndex = (friendly == Color::WHITE) ? move.to + 8 : move.to - 8;
         uint8_t file = enPassantIndex & 7;
         uint64_t adjacentMask = 0;
-        if (file > 0) adjacentMask |= (1ul << (move.to - 1));
-        if (file < 7) adjacentMask |= (1ul << (move.to + 1));
+        if (file > 0) adjacentMask |= (1ull << (move.to - 1));
+        if (file < 7) adjacentMask |= (1ull << (move.to + 1));
         if (adjacentMask & state.pieces.OccupancyMask(enemy, Piece::PAWN)) {
             state.zobristKey ^= m_Zobrist.ValueForEnPassant(enPassantIndex);
             state.enPassantIndex = enPassantIndex;
@@ -590,7 +589,7 @@ void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t
     }
 }
 
-// TODO: Search extensions
+// TODO: Search extensions (time)
 void Searcher::CalculateSearchTime(ExecutionTimer timer, uint64_t msRemaining)
 {
     JUPITER_TRACE();
@@ -670,52 +669,14 @@ bool Searcher::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::V
     JUPITER_TRACE();
 
     uint8_t index = std::countr_zero(bit);
-    Color::Value enemy = Color::Opposite(color);
     Bitboard occupancy = state.pieces.OccupancyMask();
 
-    // Queens
-    {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::QUEEN, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::QUEEN))
-            return true;
-    }
-
-    // Bishops
-    {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::BISHOP, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::BISHOP))
-            return true;
-    }
-
-    // Rooks
-    {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::ROOK, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::ROOK))
-            return true;
-    }
-
-    // Pawns
-    {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::PAWN, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::PAWN))
-            return true;
-    }
-
-    // Knights
-    {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::KNIGHT, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::KNIGHT))
-            return true;
-    }
-
-    // Kings
-    {
-        Bitboard attacks = m_AttackTable.GetAttacks(index, Piece::KING, enemy, occupancy);
-        if (attacks & state.pieces.OccupancyMask(color, Piece::KING))
-            return true;
-    }
-
-    return false;
+    return (m_AttackTable.GetQueenAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::QUEEN))
+        | (m_AttackTable.GetRookAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::ROOK))
+        | (m_AttackTable.GetBishopAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::BISHOP))
+        | (m_AttackTable.GetKnightAttacks(index) & state.pieces.OccupancyMask(color, Piece::KNIGHT))
+        | (m_AttackTable.GetPawnAttacks(index, Color::Opposite(color)) & state.pieces.OccupancyMask(color, Piece::PAWN))
+        | (m_AttackTable.GetKingAttacks(index) & state.pieces.OccupancyMask(color, Piece::KING));
 }
 
 bool Searcher::WasLegal(const BoardState& state, MoveData moveData)
@@ -729,9 +690,9 @@ bool Searcher::WasLegal(const BoardState& state, MoveData moveData)
 
     // Check intermediate and start squares if castling
     if (moveData.move.piece == Piece::KING && Difference(moveData.move.from, moveData.move.to) == 2) {
-        bool startAttacked = SquareUnderAttack(std::forward<const BoardState>(state), 1ul << moveData.move.from, Color::Opposite(moveData.turn));
+        bool startAttacked = SquareUnderAttack(std::forward<const BoardState>(state), 1ull << moveData.move.from, Color::Opposite(moveData.turn));
         uint8_t midIndex = (moveData.move.from > moveData.move.to) ? moveData.move.from - 1 : moveData.move.from + 1;
-        bool midAttacked = SquareUnderAttack(std::forward<const BoardState>(state), 1ul << midIndex, Color::Opposite(moveData.turn));
+        bool midAttacked = SquareUnderAttack(std::forward<const BoardState>(state), 1ull << midIndex, Color::Opposite(moveData.turn));
 
         return !(targetAttacked || startAttacked || midAttacked);
     }

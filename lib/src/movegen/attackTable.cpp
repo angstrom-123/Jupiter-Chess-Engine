@@ -8,7 +8,6 @@
 #include <iterator>
 #include <bit>
 #include <array>
-#include "util/exception.h"
 #include "util/instrumenter.h"
 #include "util/rng.h"
 
@@ -30,44 +29,38 @@ AttackTable::AttackTable()
     GenerateSliderTables();
 }
 
-Bitboard AttackTable::GetAttacks(uint8_t index, Piece::Value piece, Color::Value color, Bitboard occupancy) const
+Bitboard AttackTable::GetPawnAttacks(uint8_t index, Color::Value color) const 
 {
-    JUPITER_TRACE();
+    return m_PawnTables[color][index];
+}
 
-    switch (piece) {
-        case Piece::PAWN:
-            return m_PawnTables[color][index];
-        case Piece::KNIGHT:
-            return m_KnightTables[index];
-        case Piece::BISHOP:
-        {
-            Bitboard blockers = occupancy & m_BishopData.masks[index];
-            uint16_t tableIndex = static_cast<uint16_t>((blockers * m_BishopData.magics[index]) >> m_BishopData.shifts[index]);
-            return m_BishopData.tables[index][tableIndex];
-        }
-        case Piece::ROOK:
-        {
-            Bitboard blockers = occupancy & m_RookData.masks[index];
-            uint16_t tableIndex = static_cast<uint16_t>((blockers * m_RookData.magics[index]) >> m_RookData.shifts[index]);
-            return m_RookData.tables[index][tableIndex];
-        }
-        case Piece::QUEEN:
-        {
-            Bitboard blockers = occupancy & m_BishopData.masks[index];
-            uint16_t tableIndex = static_cast<uint16_t>((blockers * m_BishopData.magics[index]) >> m_BishopData.shifts[index]);
-            Bitboard bishopAttacks = m_BishopData.tables[index][tableIndex];
+Bitboard AttackTable::GetKnightAttacks(uint8_t index) const 
+{
+    return m_KnightTables[index];
+}
 
-            blockers = occupancy & m_RookData.masks[index];
-            tableIndex = static_cast<uint16_t>((blockers * m_RookData.magics[index]) >> m_RookData.shifts[index]);
-            Bitboard rookAttacks = m_RookData.tables[index][tableIndex];
+Bitboard AttackTable::GetBishopAttacks(uint8_t index, Bitboard occupancy) const 
+{
+    Bitboard blockers = occupancy & m_BishopData.masks[index];
+    uint16_t tableIndex = static_cast<uint16_t>((blockers * m_BishopData.magics[index]) >> m_BishopData.shifts[index]);
+    return m_BishopData.tables[index][tableIndex];
+}
 
-            return bishopAttacks | rookAttacks;
-        }
-        case Piece::KING:
-            return m_KingTables[index];
-        default:
-            throw JupiterException(std::string("Getting attacks for invalid piece: ") + Piece::Show(piece));
-    }
+Bitboard AttackTable::GetRookAttacks(uint8_t index, Bitboard occupancy) const
+{
+    Bitboard blockers = occupancy & m_RookData.masks[index];
+    uint16_t tableIndex = static_cast<uint16_t>((blockers * m_RookData.magics[index]) >> m_RookData.shifts[index]);
+    return m_RookData.tables[index][tableIndex];
+}
+
+Bitboard AttackTable::GetQueenAttacks(uint8_t index, Bitboard occupancy) const 
+{
+    return GetBishopAttacks(index, occupancy) | GetRookAttacks(index, occupancy);
+}
+
+Bitboard AttackTable::GetKingAttacks(uint8_t index) const 
+{
+    return m_KingTables[index];
 }
 
 void AttackTable::SerializeMagics(const fs::path& path)
@@ -101,7 +94,7 @@ void AttackTable::GeneratePawnTables()
             int8_t xx = x - delta[0];
             int8_t yy = y - delta[1];
             if (xx >= 0 && xx < 8 && yy >= 0 && yy < 8)
-                mask |= (1ul << ToIndex(xx, yy));
+                mask |= (1ull << ToIndex(xx, yy));
         }
         m_PawnTables[Color::WHITE][i] = mask;
     }
@@ -114,7 +107,7 @@ void AttackTable::GeneratePawnTables()
             int8_t xx = x + delta[0];
             int8_t yy = y + delta[1];
             if (xx >= 0 && xx < 8 && yy >= 0 && yy < 8)
-                mask |= (1ul << ToIndex(xx, yy));
+                mask |= (1ull << ToIndex(xx, yy));
         }
         m_PawnTables[Color::BLACK][i] = mask;
     }
@@ -132,7 +125,7 @@ void AttackTable::GenerateKnightTables()
             int8_t xx = x + delta[0];
             int8_t yy = y + delta[1];
             if (xx >= 0 && xx < 8 && yy >= 0 && yy < 8)
-                mask |= (1ul << ToIndex(xx, yy));
+                mask |= (1ull << ToIndex(xx, yy));
         }
         m_KnightTables[i] = mask;
     }
@@ -150,7 +143,7 @@ void AttackTable::GenerateKingTables()
             int8_t xx = x + delta[0];
             int8_t yy = y + delta[1];
             if (xx >= 0 && xx < 8 && yy >= 0 && yy < 8)
-                mask |= (1ul << ToIndex(xx, yy));
+                mask |= (1ull << ToIndex(xx, yy));
         }
         m_KingTables[i] = mask;
     }
@@ -176,7 +169,7 @@ void AttackTable::GenerateSliderTables()
             if (!m_MagicsLoadedFromFile)
                 m_RookData.magics[i] = FindMagic(i, rng, Piece::ROOK);
 
-            uint64_t rookSize = 1ul << (64 - m_RookData.shifts[i]);
+            uint64_t rookSize = 1ull << (64 - m_RookData.shifts[i]);
             m_RookData.tables[i].resize(rookSize);
             Bitboard rookSub = m_RookData.masks[i];
             do {
@@ -193,7 +186,7 @@ void AttackTable::GenerateSliderTables()
             if (!m_MagicsLoadedFromFile)
                 m_BishopData.magics[i] = FindMagic(i, rng, Piece::BISHOP);
 
-            uint64_t bishopSize = 1ul << (64 - m_BishopData.shifts[i]);
+            uint64_t bishopSize = 1ull << (64 - m_BishopData.shifts[i]);
             m_BishopData.tables[i].resize(bishopSize);
             Bitboard bishopSub = m_BishopData.masks[i];
             do {
@@ -232,7 +225,7 @@ Bitboard AttackTable::GenerateSliderMask(uint8_t index, const std::array<int8_t[
             if (xxNext < 0 || xxNext > 7 || yyNext < 0 || yyNext > 7)
                 break;
 
-            mask |= (1ul << ToIndex(xx, yy));
+            mask |= (1ull << ToIndex(xx, yy));
         }
     }
     return mask;
@@ -252,7 +245,7 @@ Bitboard AttackTable::GenerateSliderAttacks(uint8_t index, Bitboard occupancy, c
             if (xx < 0 || xx > 7 || yy < 0 || yy > 7)
                 break;
 
-            uint64_t bit = 1ul << ToIndex(xx, yy);
+            uint64_t bit = 1ull << ToIndex(xx, yy);
             mask |= bit;
 
             if (occupancy & bit)
@@ -279,14 +272,14 @@ Bitboard AttackTable::FindMagic(uint8_t index, RomuQuadRandom& rng, Piece::Value
     Bitboard mask = data.masks[index];
     uint8_t bitCount = std::popcount(mask); 
 
-    Buffer<Bitboard, 1ul << 12> occupancies;
+    Buffer<Bitboard, 1ull << 12> occupancies;
     Bitboard sub = mask;
     do {
         occupancies.PushBack(sub);
         sub = (sub - 1) & mask;
     } while (sub != mask);
 
-    Buffer<Bitboard, 1ul << 12> usedAttacks(1ul << 12);
+    Buffer<Bitboard, 1ull << 12> usedAttacks(1ull << 12);
     for (uint64_t attempt = 0; attempt < maxAttempts; attempt++) {
         uint64_t magic = SparseRandom();
 

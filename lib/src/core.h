@@ -60,7 +60,7 @@ struct Piece {
             default: return "None";
         }
     }
-    static int64_t Evaluate(Value value) 
+    static int32_t Evaluate(Value value) 
     {
         switch (value) {
             case PAWN: return 100;

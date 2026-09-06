@@ -3,6 +3,7 @@
 #include "board/bitboard.h"
 #include "board/zobrist.h"
 #include "core.h"
+#include "datastructure/buffer.h"
 #include "evaluation/pieceSquareTable.h"
 
 union LongAlgebraicMove {
@@ -10,11 +11,12 @@ union LongAlgebraicMove {
         char from[2];
         char to[2];
         char promote;
+        char _padding[3];
     };
-    char chars[5];
+    char chars[8];
 
     bool IsValid() const { return chars[0] != '\0'; }
-    static LongAlgebraicMove Invalid() { return LongAlgebraicMove { .chars = { '\0', '\0', '\0', '\0', '\0' } }; }
+    static LongAlgebraicMove Invalid() { return LongAlgebraicMove { .chars = { '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0' } }; }
     static LongAlgebraicMove FromChars(char *chars);
 };
 
@@ -42,3 +44,10 @@ struct MoveData {
     uint8_t fiftyMoveCounter{0};
     PSTScore pstScore{PSTScore(0, 0)};
 };
+
+const uint64_t MAX_POSSIBLE_QUIETS = 100;
+const uint64_t MAX_POSSIBLE_ATTACKS = 100;
+
+using QuietMoveBuffer = Buffer<Move, MAX_POSSIBLE_QUIETS>;
+using AttackMoveBuffer = Buffer<Move, MAX_POSSIBLE_ATTACKS>;
+using CombinedMoveBuffer = Buffer<Move, MAX_POSSIBLE_QUIETS + MAX_POSSIBLE_ATTACKS>;

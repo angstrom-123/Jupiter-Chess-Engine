@@ -155,7 +155,7 @@ PSTScore PieceSquareTables::Get(Color::Value color, Piece::Value piece, uint8_t 
     // Invert table if black
     int64_t mult = 1;
     if (color == Color::BLACK) {
-        index ^= 56ul;
+        index ^= 56ull;
         mult = -1;
     }
 

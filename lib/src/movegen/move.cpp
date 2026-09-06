@@ -46,7 +46,7 @@ LongAlgebraicMove Move::ToLAN() const
         result[1] = '8' - y;
     };
 
-    LongAlgebraicMove lan =  { .chars = { '\0', '\0', '\0', '\0', '\0' } };
+    LongAlgebraicMove lan =  { .chars = { '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0' } };
 
     if (!IsValid())
         return LongAlgebraicMove::Invalid();
