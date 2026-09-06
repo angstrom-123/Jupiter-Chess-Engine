@@ -10,7 +10,6 @@
 int32_t Evaluator::Evaluate(const BoardState& state) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     // Draw by fifty move rule
     if (state.fiftyMoveCounter >= 75)
@@ -40,7 +39,6 @@ int32_t Evaluator::Evaluate(const BoardState& state) const
 int32_t Evaluator::MaterialBalance(const BoardState& state, int64_t (& pieceCounts)[Color::MAX_ENUM][Piece::MAX_ENUM], bool& isMaterialDraw) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     int32_t materialEval = 0;
 
@@ -94,7 +92,6 @@ int32_t Evaluator::MaterialBalance(const BoardState& state, int64_t (& pieceCoun
 int32_t Evaluator::PiecePositions(const BoardState& state, float phase) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     PSTScore relativeScore = (state.turn == Color::WHITE) ? state.pstScore : -state.pstScore;
     return (relativeScore.midgame * (1.0 - phase)) + (relativeScore.endgame * phase);
@@ -103,7 +100,6 @@ int32_t Evaluator::PiecePositions(const BoardState& state, float phase) const
 int32_t Evaluator::Mopup(const BoardState& state, int32_t materialBalance, float phase) const 
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     int32_t mopupEval = 0;
 
@@ -129,7 +125,6 @@ int32_t Evaluator::Mopup(const BoardState& state, int32_t materialBalance, float
 int32_t Evaluator::KingSafety(const BoardState& state, float phase) const 
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     // Ignore king safety if the game phase is advanced enough
     const float MAX_PHASE = 0.6;
@@ -203,7 +198,6 @@ int32_t Evaluator::KingSafety(const BoardState& state, float phase) const
 int32_t Evaluator::Mobility(const BoardState& state) const 
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     const int32_t MOBILITY_FACTOR = 5;
 
@@ -214,7 +208,6 @@ int32_t Evaluator::Mobility(const BoardState& state) const
 int32_t Evaluator::PawnStructure(const BoardState& state) const 
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     int32_t structureEval = 0;
 
@@ -257,7 +250,6 @@ int32_t Evaluator::PawnStructure(const BoardState& state) const
 float Evaluator::GamePhase(const BoardState& state) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     Color::Value friendly = state.turn;
     Color::Value enemy = Color::Opposite(state.turn);
@@ -283,7 +275,6 @@ float Evaluator::GamePhase(const BoardState& state) const
 int32_t Evaluator::SEE(const BoardState& state, Move move) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     BitboardSet pieces(state.pieces);
     Color::Value enemy = Color::Opposite(state.turn);

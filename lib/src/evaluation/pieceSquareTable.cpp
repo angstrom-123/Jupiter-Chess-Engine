@@ -4,7 +4,6 @@
 PieceSquareTables::PieceSquareTables()
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     // Rofchade PST 
     // Taken from a chess forum post.

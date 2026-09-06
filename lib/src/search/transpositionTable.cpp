@@ -9,7 +9,6 @@
 TranspositionTable::TranspositionTable()
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     m_Table = new PackedTableEntry[TRANSPOSITION_TABLE_SIZE];
     std::memset(m_Table, 0, TRANSPOSITION_TABLE_SIZE * sizeof(PackedTableEntry));
@@ -23,7 +22,6 @@ TranspositionTable::~TranspositionTable()
 TableEntry TranspositionTable::Get(ZobristKey key)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     uint64_t index = Index(key);
     const PackedTableEntry& entry = m_Table[index];
@@ -35,7 +33,6 @@ TableEntry TranspositionTable::Get(ZobristKey key)
 void TranspositionTable::Save(const BoardState& state, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     uint64_t index = Index(state.zobristKey);
     const PackedTableEntry& oldEntry = m_Table[index];

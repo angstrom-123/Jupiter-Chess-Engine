@@ -6,7 +6,6 @@
 Move MoveStream::Stream(bool quiescenceMode)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     m_LastWasQuiet = false;
     m_LastWasBadAttack = false;
@@ -103,7 +102,6 @@ static const uint8_t MVV_LVA_TABLE[Piece::MAX_ENUM + 1][Piece::MAX_ENUM + 1] = {
 void MoveStream::OrderAttacks()
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     Color::Value enemy = Color::Opposite(m_State.turn);
     std::sort(m_Attacks.begin(), m_Attacks.end(), [this, enemy](const Move& a, const Move& b) {
@@ -127,7 +125,6 @@ void MoveStream::OrderAttacks()
 void MoveStream::OrderQuiets()
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     std::sort(m_Quiets.begin(), m_Quiets.end(), [this](const Move& a, const Move& b) {
         return *m_HistoryTable[a.from][a.to] > *m_HistoryTable[b.from][b.to];

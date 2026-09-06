@@ -19,7 +19,6 @@ Searcher::Searcher(Zobrist& zobrist, OpeningBook& openingBook, PieceSquareTables
     : m_Zobrist{std::forward<const Zobrist>(zobrist)}, m_OpeningBook{std::forward<const OpeningBook>(openingBook)}, m_PieceSquareTables{std::forward<const PieceSquareTables>(pieceSquareTables)} 
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     m_FastRNG.Warm();
 }
@@ -27,7 +26,6 @@ Searcher::Searcher(Zobrist& zobrist, OpeningBook& openingBook, PieceSquareTables
 Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemaining)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     // Keeping these in object scope so all the functions can edit them
     m_SearchAborted = false;
@@ -167,7 +165,6 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
 int32_t Searcher::Search(BoardState& state, History& history, ExecutionTimer timer, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t ply)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     int32_t startAlpha = alpha;
 
@@ -302,7 +299,6 @@ int32_t Searcher::Search(BoardState& state, History& history, ExecutionTimer tim
 int32_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer timer, int32_t alpha, int32_t beta, uint8_t ply)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     // Only check termination condition every 4096 nodes to save expensive clock calls
     if ((nodesSearched & 4095) == 0 && timer.Now() >= m_SoftSearchBound) {
@@ -406,7 +402,6 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, ExecutionTimer ti
 void Searcher::SetTimeControl(uint64_t seconds, uint64_t increment)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     m_TimeControlSeconds = seconds;
     m_TimeControlIncrement = increment;
@@ -415,7 +410,6 @@ void Searcher::SetTimeControl(uint64_t seconds, uint64_t increment)
 bool Searcher::IsCheckmate(const BoardState& state)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     uint64_t kingBit = state.pieces.OccupancyMask(state.turn, Piece::KING);
     return SquareUnderAttack(state, kingBit, Color::Opposite(state.turn));
@@ -424,7 +418,6 @@ bool Searcher::IsCheckmate(const BoardState& state)
 MoveData Searcher::MakeMove(BoardState& state, Move move)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     Color::Value friendly = state.turn;
     Color::Value enemy = Color::Opposite(state.turn);
@@ -604,7 +597,6 @@ void Searcher::CalculateSearchTime(ExecutionTimer timer, uint64_t msRemaining)
 Move Searcher::PickOpeningMove(const BoardState& state)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     if (!m_InOpeningBook)
         return Move::Invalid();
@@ -622,7 +614,6 @@ Move Searcher::PickOpeningMove(const BoardState& state)
 void Searcher::UnmakeMove(BoardState& state, MoveData moveData)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     const Move& move = moveData.move;
 
@@ -682,7 +673,6 @@ bool Searcher::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::V
 bool Searcher::WasLegal(const BoardState& state, MoveData moveData)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     Bitboard king = state.pieces.OccupancyMask(moveData.turn, Piece::KING);
 
@@ -703,7 +693,6 @@ bool Searcher::WasLegal(const BoardState& state, MoveData moveData)
 bool Searcher::IsCheck(const BoardState& state)
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     return SquareUnderAttack(std::forward<const BoardState>(state), state.pieces.OccupancyMask(Color::WHITE, Piece::KING), Color::BLACK)
         || SquareUnderAttack(std::forward<const BoardState>(state), state.pieces.OccupancyMask(Color::BLACK, Piece::KING), Color::WHITE);

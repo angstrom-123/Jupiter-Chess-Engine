@@ -159,16 +159,10 @@ namespace libjupiter {
         ComputePSTScore();
     }
 
-    Board::~Board()
-    {
-        JUPITER_PROFILING_END();
-    }
-
     // Now doing incremental updates so need to initialise it
     void Board::ComputePSTScore()
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         m_State.pstScore = PSTScore(0, 0);
         for (Color::Value color : { Color::WHITE, Color::BLACK }) {
@@ -186,7 +180,6 @@ namespace libjupiter {
     void Board::SetTimeControl(uint64_t seconds, uint64_t increment)
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         m_Searcher.SetTimeControl(seconds, increment);
     }
@@ -194,7 +187,6 @@ namespace libjupiter {
     Move Board::Go(uint64_t moveMs)
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         return m_Searcher.FindBest(m_State, m_History, moveMs);
     }
@@ -202,7 +194,6 @@ namespace libjupiter {
     void Board::MakeMove(LongAlgebraicMove lan)
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         Move move = Move::FromLAN(lan, m_State.pieces);
         if (!move.IsValid())
@@ -219,7 +210,6 @@ namespace libjupiter {
     void Board::GetTelemetry(std::string& result)
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         std::ostringstream ss;
 
@@ -237,7 +227,6 @@ namespace libjupiter {
     void Board::GetMetrics(std::string& result)
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         std::ostringstream ss;
 
@@ -252,7 +241,6 @@ namespace libjupiter {
     void Board::Show(std::string& result)
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         std::ostringstream ss;
         ss << "Move " << m_FullMoves << std::endl
@@ -285,7 +273,6 @@ namespace libjupiter {
     void Board::Clear()
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         m_State.pieces = BitboardSet{};
         m_State.rights = CastlingRights{};
@@ -298,7 +285,6 @@ namespace libjupiter {
     bool Board::SplitFEN(const char *fen, uint64_t length, FenView (&views)[13]) 
     {
         JUPITER_TRACE();
-        JUPITER_PROFILE();
 
         // Verify that the string is well formed
         uint64_t spaceCounter = 0;

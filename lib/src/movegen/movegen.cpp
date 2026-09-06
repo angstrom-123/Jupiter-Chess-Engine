@@ -8,7 +8,6 @@
 void Movegen::FindAllAttacks(AttackMoveBuffer& attacks) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     Bitboard queens = m_State.pieces.OccupancyMask(m_State.turn, Piece::QUEEN);
     while (queens) {
@@ -52,7 +51,6 @@ void Movegen::FindAllAttacks(AttackMoveBuffer& attacks) const
 void Movegen::FindAllQuiets(QuietMoveBuffer& quiets) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     Bitboard queens = m_State.pieces.OccupancyMask(m_State.turn, Piece::QUEEN);
     while (queens) {
@@ -251,7 +249,6 @@ void Movegen::FindSliderQuiets(uint8_t index, Piece::Value piece, Bitboard attac
 std::size_t Movegen::CountAllAttacks() const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     std::size_t total = 0;
 
@@ -299,7 +296,6 @@ std::size_t Movegen::CountAllAttacks() const
 std::size_t Movegen::CountAllQuiets() const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     std::size_t total = 0;
 

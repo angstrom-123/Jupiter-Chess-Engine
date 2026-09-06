@@ -15,7 +15,6 @@ namespace libjupiter {
     class Board {
     public:
         Board(const char *fen);
-        ~Board();
         void SetTimeControl(uint64_t seconds, uint64_t increment);
         Move Go(uint64_t moveMs);
         void MakeMove(LongAlgebraicMove lan);

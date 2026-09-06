@@ -10,7 +10,6 @@ History::History()
 bool History::IsRepetition()
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     if (m_History.size() <= 2)
         return false;

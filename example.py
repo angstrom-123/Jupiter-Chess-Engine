@@ -11,14 +11,10 @@ print(repr(board))
 telemetry: dict = {}
 n_searches: int = 0
 
-increment: int = 1
-seconds: int = 10
-board.set_time_control(seconds, increment)
-
-time_remaining_ms: int = 5000
+board.set_time_control(seconds=1, increment=10)
 
 while True:
-    best_move: str | None = board.go(time_remaining_ms)
+    best_move: str | None = board.go(ms_left=5000)
     if best_move is None:
         print("done")
         break 
@@ -26,10 +22,7 @@ while True:
     board.make_move(best_move)
     n_searches += 1
     telem: dict = json.loads(board.get_telemetry())
-    if len(telemetry.keys()) == 0:
-        telemetry = telem
-    else:
-        telemetry = { k: telemetry[k] + telem[k] for k in telemetry.keys()}
+    telemetry = telem if len(telemetry.keys()) == 0 else { k: telemetry[k] + telem[k] for k in telemetry.keys()}
     print(repr(board))
 
 if telemetry["searchTime"] == 0:

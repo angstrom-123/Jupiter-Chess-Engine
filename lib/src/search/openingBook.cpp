@@ -230,7 +230,6 @@ const uint64_t randoms[781] = {
 OpeningBook::OpeningBook()
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     // Read in polyglot file
     std::ifstream file(BOOK_FILE_PATH, std::ios::in | std::ios::binary | std::ios::ate);
@@ -255,7 +254,6 @@ OpeningBook::OpeningBook()
 bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     // Binary search (Polyglot orders keys ascending)
     ZobristKey targetKey = ZobristHash(std::forward<const BoardState>(state));
@@ -313,7 +311,6 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves) cons
 std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64_t bits) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     if (bits == 0)
         return std::make_pair(Move::Invalid(), 0);
@@ -360,7 +357,6 @@ std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64
 ZobristKey OpeningBook::ZobristHash(const BoardState& state) const
 {
     JUPITER_TRACE();
-    JUPITER_PROFILE();
 
     ZobristKey key = 0;
     uint64_t offset = 0;
