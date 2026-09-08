@@ -113,8 +113,7 @@ namespace libjupiter {
 
         ss << "{"
             << "\"ttSize\":" << m_Searcher.ttSize << ","
-            << "\"bookMoves\":" << (int) m_Searcher.bookMoves << ","
-            << "\"tablebasePrunes\":" << m_Searcher.tablebasePrunes
+            << "\"bookMoves\":" << (int) m_Searcher.bookMoves
             << "}";
 
         result = ss.str();

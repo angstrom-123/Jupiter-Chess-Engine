@@ -40,7 +40,6 @@ else:
     - avg Completed Depth : {telemetry["depth"] / n_searches:.3f}
     - TT Occupancy        : {metrics["ttSize"] / (1024 * 1024):.3f}MiB
     - Book Moves          : {metrics["bookMoves"]}
-    - Tablebase prunes    : {metrics["tablebasePrunes"] / 1000:.3f}K
     - Searches Completed  : {n_searches}
 """)
 

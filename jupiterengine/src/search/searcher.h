@@ -36,7 +36,6 @@ public:
     // Metrics
     uint8_t bookMoves{0};
     uint64_t ttSize{0};
-    uint64_t tablebasePrunes{0};
 
     // Telemetry
     uint8_t searchDepth{0};

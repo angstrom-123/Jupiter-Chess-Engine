@@ -56,7 +56,6 @@ class Jupiter(BaseEngine):
     - avg Completed Depth : {self.telemetry["depth"] / self.n_searches:.3f}
     - TT Occupancy        : {metrics["ttSize"] / (1024 * 1024):.3f}MiB
     - Book Moves          : {metrics["bookMoves"]}
-    - Tablebase Prunes    : {metrics["tablebasePrunes"] / 1000:.3f}K
     - Searches Completed  : {self.n_searches}
 """)
 
