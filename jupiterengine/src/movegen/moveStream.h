@@ -1,6 +1,5 @@
 #pragma once
 
-#include "movegen/attackTable.h"
 #include "movegen/move.h"
 #include "movegen/movegen.h"
 #include "board/boardState.h"
@@ -32,7 +31,7 @@ public:
     // History table and killer moves are optional if you just want movegen but will segfault if streaming without
     MoveStream(
             const BoardState& state, 
-            const AttackTable& attackTable, 
+            const Movegen& movegen, 
             const Evaluator *_Nullable eval = nullptr, 
             const HistoryTable *_Nullable historyTable = nullptr, 
             const KillerMoveBuffer *_Nullable killers = nullptr,
@@ -40,7 +39,7 @@ public:
     ) 
         : 
             m_State{std::forward<const BoardState>(state)}, 
-            m_Movegen{Movegen(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable))},
+            m_Movegen{std::forward<const Movegen>(movegen)},
             m_Eval{eval},
             m_HistoryTable{historyTable},
             m_Killers{killers}, 
@@ -57,7 +56,7 @@ private:
 private:
     StreamState::Value m_StreamState{StreamState::NONE};
     const BoardState& m_State;
-    Movegen m_Movegen;
+    const Movegen &m_Movegen;
     const Evaluator *_Nullable m_Eval{nullptr};
     const HistoryTable *_Nullable m_HistoryTable{nullptr};
     const KillerMoveBuffer *_Nullable m_Killers{nullptr};

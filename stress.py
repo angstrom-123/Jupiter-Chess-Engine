@@ -2,7 +2,7 @@
 
 from time import sleep
 
-from lib.build.libjupiter import Board
+from jupiterengine.build.libjupiter import Board
 
 MS_REMAINING: int = 500 * 1000
 

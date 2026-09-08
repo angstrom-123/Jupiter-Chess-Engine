@@ -8,6 +8,7 @@
 #include <iterator>
 #include <bit>
 #include <array>
+#include "board/boardState.h"
 #include "util/instrumenter.h"
 #include "util/rng.h"
 
@@ -27,6 +28,21 @@ AttackTable::AttackTable()
     GenerateKnightTables();
     GenerateKingTables();
     GenerateSliderTables();
+}
+
+bool AttackTable::SquareUnderAttack(const BoardState& state, uint64_t bit, Color::Value color) const
+{
+    JUPITER_TRACE();
+
+    uint8_t index = std::countr_zero(bit);
+    Bitboard occupancy = state.pieces.OccupancyMask();
+
+    return (GetQueenAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::QUEEN))
+        | (GetRookAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::ROOK))
+        | (GetBishopAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::BISHOP))
+        | (GetKnightAttacks(index) & state.pieces.OccupancyMask(color, Piece::KNIGHT))
+        | (GetPawnAttacks(index, Color::Opposite(color)) & state.pieces.OccupancyMask(color, Piece::PAWN))
+        | (GetKingAttacks(index) & state.pieces.OccupancyMask(color, Piece::KING));
 }
 
 Bitboard AttackTable::GetPawnAttacks(uint8_t index, Color::Value color) const 

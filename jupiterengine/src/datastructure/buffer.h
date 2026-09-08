@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iterator>
 #include <utility>
 
 template<typename T, std::size_t capacity> class Buffer {
@@ -7,6 +8,11 @@ public:
     Buffer() = default;
     Buffer(std::size_t size)
         : m_Size{size} {}
+    consteval Buffer(std::initializer_list<T> init)
+    {
+        for (const T& value : init)
+            m_Data[m_Size++] = value;
+    }
 
     void PushBack(T &&value)
     {
@@ -34,19 +40,19 @@ public:
     {
         m_Size = size;
     }
-    [[nodiscard]] T *Data() 
+    T *Data() 
     {
         return m_Data;
     }
-    [[nodiscard]] std::size_t Size() const 
+    std::size_t Size() const 
     {
         return m_Size;
     }
-    [[nodiscard]] std::size_t Capacity() const 
+    std::size_t Capacity() const 
     {
         return capacity;
     }
-    [[nodiscard]] bool Contains(const T& item) const 
+    bool Contains(const T& item) const 
     {
         for (std::size_t i = 0; i < m_Size; i++) {
             if (m_Data[i] == item)
@@ -54,35 +60,59 @@ public:
         }
         return false;
     }
-    [[nodiscard]] T *begin() 
+    T *begin() 
     {
         return m_Data;
     }
-    [[nodiscard]] T *end() 
+    T *end() 
     {
         return m_Data + m_Size;
     }
-    [[nodiscard]] const T *begin() const 
+    const T *begin() const 
     { 
         return m_Data;
     } 
-    [[nodiscard]] const T *end() const 
+    const T *end() const 
     {
         return m_Data + m_Size;
     }
-    [[nodiscard]] const T *cbegin() const 
+    const T *cbegin() const 
     {
-        return m_Data;
+        return begin();
     }
-    [[nodiscard]] const T *cend() const 
+    const T *cend() const 
     {
-        return m_Data + m_Size;
+        return end();
     }
-    [[nodiscard]] T& operator[](std::size_t i) 
+    std::reverse_iterator<T> rbegin() 
+    {
+        return std::reverse_iterator<T>(end());
+    }
+    std::reverse_iterator<T> rend() 
+    {
+        return std::reverse_iterator<T>(begin());
+    }
+    std::reverse_iterator<const T> rbegin() const
+    {
+        return std::reverse_iterator<const T>(end());
+    }
+    std::reverse_iterator<const T> rend() const
+    {
+        return std::reverse_iterator<const T>(begin());
+    }
+    std::reverse_iterator<const T> crbegin() const
+    {
+        return rbegin();
+    }
+    std::reverse_iterator<const T> crend() const
+    {
+        return rend();
+    }
+    T& operator[](std::size_t i) 
     { 
         return m_Data[i]; 
     }
-    [[nodiscard]] const T& operator[](std::size_t i) const 
+    const T& operator[](std::size_t i) const 
     { 
         return m_Data[i]; 
     }

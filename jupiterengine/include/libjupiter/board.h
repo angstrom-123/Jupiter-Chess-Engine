@@ -3,12 +3,10 @@
 #include <cstdint>
 #include <string>
 
-#include "core.h"
 #include "board/boardState.h"
 #include "board/history.h"
 #include "evaluation/pieceSquareTable.h"
 #include "movegen/move.h"
-#include "search/openingBook.h"
 #include "search/searcher.h"
 
 namespace libjupiter {
@@ -25,14 +23,12 @@ namespace libjupiter {
     private:
         void ComputePSTScore();
         void Clear();
-        bool SplitFEN(const char *fen, uint64_t length, FenView (&views)[13]);
 
     private:
         History m_History{History()};
         Zobrist m_Zobrist{Zobrist()};
-        OpeningBook m_OpeningBook{OpeningBook()};
         PieceSquareTables m_PieceSquareTables{PieceSquareTables()};
-        Searcher m_Searcher{Searcher(m_Zobrist, m_OpeningBook, m_PieceSquareTables)};
+        Searcher m_Searcher{Searcher(m_Zobrist, m_PieceSquareTables)}; // TODO: Add opening book and tablebase to search
         BoardState m_State;
         uint64_t m_FullMoves{1};
         uint64_t m_HalfMoves{0};

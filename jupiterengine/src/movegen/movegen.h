@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdint>
+#include "board/zobrist.h"
 #include "movegen/attackTable.h"
 #include "movegen/move.h"
 #include "board/boardState.h"

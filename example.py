@@ -2,19 +2,19 @@
 
 import json
 
-from lib.build.libjupiter import Board
+from jupiterengine.build.libjupiter import Board
 
-board: Board = Board("kb/8/8/4KR2/8/8/8/8 w - - 0 1")
+board: Board = Board("k7/8/8/K4R2/8/8/8/8 w - - 0 1")
 
 print(repr(board))
 
 telemetry: dict = {}
 n_searches: int = 0
 
-board.set_time_control(seconds=1, increment=10)
+board.set_time_control(10, 1)
 
 while True:
-    best_move: str | None = board.go(ms_left=5000)
+    best_move: str | None = board.go(1000)
     if best_move is None:
         print("done")
         break 
@@ -40,6 +40,7 @@ else:
     - avg Completed Depth : {telemetry["depth"] / n_searches:.3f}
     - TT Occupancy        : {metrics["ttSize"] / (1024 * 1024):.3f}MiB
     - Book Moves          : {metrics["bookMoves"]}
+    - Tablebase prunes    : {metrics["tablebasePrunes"] / 1000:.3f}K
     - Searches Completed  : {n_searches}
 """)
 

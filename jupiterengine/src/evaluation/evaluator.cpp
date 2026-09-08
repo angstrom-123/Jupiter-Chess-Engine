@@ -12,7 +12,7 @@ int32_t Evaluator::Evaluate(const BoardState& state) const
     JUPITER_TRACE();
 
     // Draw by fifty move rule
-    if (state.fiftyMoveCounter >= 75)
+    if (state.fiftyMoveCounter >= 100)
         return 0;
 
     bool isMaterialDraw = false;

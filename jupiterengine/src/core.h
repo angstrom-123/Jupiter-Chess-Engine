@@ -1,5 +1,6 @@
 #pragma once
 
+#include "datastructure/buffer.h"
 #include "util/exception.h"
 #include <cstdint>
 #include <cstdlib>
@@ -14,6 +15,8 @@ struct Color {
         BLACK,
         MAX_ENUM
     } Value;
+
+    static constexpr Buffer<Color::Value, Color::MAX_ENUM> values{Color::WHITE, Color::BLACK};
 
     static Value Invalid() { return Value::MAX_ENUM; }
     static bool IsValid(Value value) { return value < Value::MAX_ENUM; }
@@ -45,6 +48,8 @@ struct Piece {
         KING,
         MAX_ENUM
     } Value;
+
+    static constexpr Buffer<Piece::Value, Piece::MAX_ENUM> values{Piece::PAWN, Piece::KNIGHT, Piece::BISHOP, Piece::ROOK, Piece::QUEEN, Piece::KING};
 
     static Value Invalid() { return Value::MAX_ENUM; }
     static bool IsValid(Value value) { return value < Value::MAX_ENUM; }

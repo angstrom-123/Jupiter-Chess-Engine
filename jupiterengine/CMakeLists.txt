@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Don't use set because apparently apple doesn't like it
 string(APPEND CMAKE_CXX_FLAGS " -Wall -Wextra")
-string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O3 -g -DDEBUG")
+string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O3 -g -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer")
 string(APPEND CMAKE_CXX_FLAGS_RELEASE " -O3 -DNOTRACE")
 string(APPEND CMAKE_CXX_FLAGS_PROFILE " -O3 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls -DNOTRACE")
 
@@ -18,6 +18,7 @@ set(SOURCES
     src/core.cpp 
     src/pythonModule.cpp
     src/board/bitboard.cpp 
+    src/board/boardState.cpp
     src/board/board.cpp 
     src/board/zobrist.cpp
     src/board/history.cpp
@@ -31,6 +32,7 @@ set(SOURCES
     src/search/searcher.cpp
     src/search/transpositionTable.cpp
     src/search/openingBook.cpp
+    src/util/fenParser.cpp
     src/util/rng.cpp
     src/util/executionTimer.cpp
 )

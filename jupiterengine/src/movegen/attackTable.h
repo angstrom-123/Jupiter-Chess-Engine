@@ -23,6 +23,7 @@ struct SliderData {
 class AttackTable {
 public:
     AttackTable();
+    bool SquareUnderAttack(const class BoardState& state, uint64_t bit, Color::Value color) const;
     Bitboard GetPawnAttacks(uint8_t index, Color::Value color) const;
     Bitboard GetKnightAttacks(uint8_t index) const;
     Bitboard GetBishopAttacks(uint8_t index, Bitboard occupancy) const;
