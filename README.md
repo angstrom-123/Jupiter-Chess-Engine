@@ -5,7 +5,7 @@ Written to integrate directly with [Jupiter Client](https://github.com/angstrom-
 
 - `example.py` shows usage of the library
 - `jupiter.py` integrates with [Jupiter Client](https://github.com/angstrom-123/Jupiter-Chess-Interface)
-- `lib` contains the source c++ library code
+- `jupiterengine/` contains the source c++ library code
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ Written to integrate directly with [Jupiter Client](https://github.com/angstrom-
 Compile the library code into a dll:
 
 ```bash
-cd lib
+cd jupiterengine
 mkdir build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
