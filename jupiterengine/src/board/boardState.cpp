@@ -14,6 +14,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
     // For unmaking the move later
     MoveData moveData = {
         .zobristKey = zobristKey,
+        .pawnKey = pawnKey,
         .move = move,
         .capture = capture,
         .rights = rights,
@@ -26,6 +27,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
     // Move piece
     pieces.Unset(friendly, move.piece, move.from);
     zobristKey ^= zobrist.ValueForPiece(friendly, move.piece, move.from);
+    if (move.piece == Piece::PAWN) pawnKey ^= zobrist.ValueForPiece(friendly, move.piece, move.from);
     pstScore -= pst.Get(friendly, move.piece, move.from);
     if (Piece::IsValid(move.promote)) {
         pieces.Set(friendly, move.promote, move.to);
@@ -34,6 +36,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
     } else {
         pieces.Set(friendly, move.piece, move.to);
         zobristKey ^= zobrist.ValueForPiece(friendly, move.piece, move.to);
+        if (move.piece == Piece::PAWN) pawnKey ^= zobrist.ValueForPiece(friendly, move.piece, move.to);
         pstScore += pst.Get(friendly, move.piece, move.to);
     }
 
@@ -41,12 +44,11 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
     if (Piece::IsValid(capture)) {
         pieces.Unset(enemy, capture, move.to);
         zobristKey ^= zobrist.ValueForPiece(enemy, capture, move.to);
+        if (capture == Piece::PAWN) pawnKey ^= zobrist.ValueForPiece(enemy, capture, move.to);
         pstScore -= pst.Get(enemy, capture, move.to);
     }
 
     // Move rook if castling
-    // if (move.piece == Piece::KING && Difference(move.from, move.to) == 2) {
-    //     if (move.from > move.to) {
     if (move.piece == Piece::KING) {
         if (move.from - move.to == 2) { // Condition should hold even with underflow
             pieces.Unset(friendly, Piece::ROOK, move.from - 4);
@@ -73,6 +75,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
         uint8_t pawnIndex = move.to + enPassantOffset[friendly];
         pieces.Unset(enemy, Piece::PAWN, pawnIndex);
         zobristKey ^= zobrist.ValueForPiece(enemy, Piece::PAWN, pawnIndex);
+        pawnKey ^= zobrist.ValueForPiece(enemy, Piece::PAWN, pawnIndex);
         pstScore -= pst.Get(enemy, Piece::PAWN, pawnIndex);
     }
 
@@ -125,7 +128,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
         uint64_t adjacentMask = 0;
         if (file > 0) adjacentMask |= (1ull << (move.to - 1));
         if (file < 7) adjacentMask |= (1ull << (move.to + 1));
-        if (adjacentMask & pieces.OccupancyMask(enemy, Piece::PAWN)) {
+        if (adjacentMask & pieces.Occupancy(enemy, Piece::PAWN)) {
             zobristKey ^= zobrist.ValueForEnPassant(enPassantIndex);
             this->enPassantIndex = enPassantIndex;
         }
@@ -186,6 +189,7 @@ void BoardState::UnmakeMove(MoveData moveData)
     enPassantIndex = moveData.enPassantIndex;
     fiftyMoveCounter = moveData.fiftyMoveCounter;
     zobristKey = moveData.zobristKey;
+    pawnKey = moveData.pawnKey;
     pstScore = moveData.pstScore;
 }
 
@@ -193,7 +197,7 @@ bool BoardState::WasLegalMove(const AttackTable& attackTable, MoveData moveData)
 {
     JUPITER_TRACE();
 
-    Bitboard king = pieces.OccupancyMask(moveData.turn, Piece::KING);
+    Bitboard king = pieces.Occupancy(moveData.turn, Piece::KING);
 
     bool targetAttacked = attackTable.SquareUnderAttack(std::forward<const BoardState>(*this), king, Color::Opposite(moveData.turn));
 

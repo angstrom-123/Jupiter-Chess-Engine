@@ -23,6 +23,8 @@ public:
     Searcher(Zobrist& zobrist, PieceSquareTables& pieceSquareTables);
     Move FindBest(BoardState& state, History& history, uint64_t msRemaining);
     void SetTimeControl(uint64_t seconds, uint64_t increment);
+    void TelemetryJSON(std::string& result) const;
+    void MetricsJSON(std::string& result) const;
 
 private:
     void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv);
@@ -32,33 +34,34 @@ private:
     int32_t Search(BoardState& state, History& history, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t ply);
     int32_t Quiesce(BoardState& state, History& history, int32_t alpha, int32_t beta, uint8_t ply);
 
-public:
+private:
     // Metrics
-    uint8_t bookMoves{0};
-    uint64_t ttSize{0};
+    uint8_t m_BookMoves{0};
 
     // Telemetry
-    uint8_t searchDepth{0};
-    uint64_t nodesSearched{0};
-    uint64_t nodesLookedUp{0};
-    uint64_t nodesQuiesced{0};
-    uint64_t searchTime{0};
+    uint8_t m_LastSearchDepth{0};
+    uint64_t m_LastNodesSearched{0};
+    uint64_t m_LastNodesLookedUp{0};
+    uint64_t m_LastNodesQuiesced{0};
+    uint64_t m_LastSearchTime{0};
+    uint64_t m_LastPawnsLookedUp{0};
+    uint64_t m_LastEvaluations{0};
 
-private:
     uint64_t m_TimeControlSeconds{0};
     uint64_t m_TimeControlIncrement{0};
     bool m_SearchAborted{false};
     bool m_InOpeningBook{true};
     uint64_t m_SoftSearchBound{0};
-    uint64_t m_HardSearchBound{0};
+    uint64_t m_HardSearchBound{0}; // TODO: Better search extensions / reductions
+
     ExecutionTimer m_Timer;
     Buffer<KillerMoveBuffer, MAX_PLY> m_Killers;
     RomuMonoRandom m_FastRNG{RomuMonoRandom(time(nullptr))};
+    TranspositionTable m_TranspositionTable{TranspositionTable()};
     AttackTable m_AttackTable{AttackTable()};
     OpeningBook m_OpeningBook{OpeningBook()};
-    Evaluator m_Eval{Evaluator(m_AttackTable)};
     const Zobrist& m_Zobrist;
     const PieceSquareTables &m_PieceSquareTables;
-    TranspositionTable m_TranspositionTable;
     uint16_t m_HistoryTable[64][64]{};
+    Evaluator m_Eval{Evaluator(m_AttackTable)};
 };

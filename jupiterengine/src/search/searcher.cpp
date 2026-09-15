@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <ctime>
 #include <utility>
 
@@ -28,9 +29,9 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
 
     // Keeping these in object scope so all the functions can edit them
     m_SearchAborted = false;
-    nodesSearched = 0;
-    nodesQuiesced = 0;
-    nodesLookedUp = 0;
+    m_LastNodesSearched = 0;
+    m_LastNodesQuiesced = 0;
+    m_LastNodesLookedUp = 0;
 
     // Clear killer moves
     for (std::size_t i = 0; i < MAX_PLY; i++)
@@ -51,10 +52,10 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
     uint16_t depth = 0;
     while (++depth) {
         // Check if over time every 4096 nodes
-        if (((nodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) || depth >= MAX_PLY)
+        if (((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) || depth >= MAX_PLY)
             break;
 
-        nodesSearched++;
+        m_LastNodesSearched++;
 
         int16_t depthUnits = depth * PLY_UNIT;
 
@@ -64,9 +65,9 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
         Move bestMove = Move::Invalid();
 
         Move ttMove = Move::Invalid();
-        const TableEntry entry = m_TranspositionTable.Get(state.zobristKey);
+        const TTEntry entry = m_TranspositionTable.Get(state.zobristKey);
         if (entry.IsValid() && entry.depth >= depth) {
-            nodesLookedUp++;
+            m_LastNodesLookedUp++;
 
             // Only consider exact matches at root (no alpha or beta updates)
             if (entry.nodeType == NodeType::EXACT) {
@@ -149,11 +150,12 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
         finalMove = bestMove;
     }
 
-    searchDepth = (m_SearchAborted) ? depth - 1 : depth;
-    searchTime = m_SoftSearchBound - startMs;
-    ttSize = m_TranspositionTable.OccupancyBytes();
+    m_LastSearchDepth = (m_SearchAborted) ? depth - 1 : depth;
+    m_LastSearchTime = m_SoftSearchBound - startMs;
+    m_LastPawnsLookedUp = m_Eval.GetPawnTableHitCount() - m_LastPawnsLookedUp;
+    m_LastEvaluations = m_Eval.GetEvaluationCount() - m_LastEvaluations;
 
-    if (searchDepth <= 3)
+    if (m_LastSearchDepth <= 3)
         WARN("Extremely low search depth detected");
 
     return finalMove;
@@ -164,7 +166,7 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
     JUPITER_TRACE();
 
     // Check if over time every 4096 nodes
-    if ((nodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) {
+    if ((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) {
         m_SearchAborted = true;
         return 0;
     }
@@ -173,7 +175,7 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
     if (depthUnits <= 0)
         return Quiesce(state, history, alpha, beta, ply);
 
-    nodesSearched++;
+    m_LastNodesSearched++;
 
     int32_t startAlpha = alpha;
 
@@ -181,9 +183,9 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
     Move bestMove = Move::Invalid();
 
     Move ttMove = Move::Invalid();
-    const TableEntry entry = m_TranspositionTable.Get(state.zobristKey);
+    const TTEntry entry = m_TranspositionTable.Get(state.zobristKey);
     if (entry.IsValid() && entry.depth >= depthUnits / PLY_UNIT) {
-        nodesLookedUp++;
+        m_LastNodesLookedUp++;
         ttMove = entry.bestMove;
 
         int32_t score = entry.score;
@@ -289,7 +291,7 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
         ttScore += ply;
     else if (bestScore < -MATE_THRESHOLD)
         ttScore -= ply;
-    m_TranspositionTable.Save(state, ttScore, depthUnits / PLY_UNIT, bestMove, nodeType);
+    m_TranspositionTable.Save(state.zobristKey, ttScore, depthUnits / PLY_UNIT, bestMove, nodeType);
 
     return bestScore;
 }
@@ -299,16 +301,16 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
     JUPITER_TRACE();
 
     // Only check termination condition every 4096 nodes to save expensive clock calls
-    if ((nodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) {
+    if ((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) {
         m_SearchAborted = true;
         return 0;
     }
 
-    nodesQuiesced++;
-    nodesSearched++;
+    m_LastNodesQuiesced++;
+    m_LastNodesSearched++;
 
     // Standing Pat is only an option when not in check
-    bool inCheck = m_AttackTable.SquareUnderAttack(state, state.pieces.OccupancyMask(state.turn, Piece::KING), Color::Opposite(state.turn));
+    bool inCheck = m_AttackTable.SquareUnderAttack(state, state.pieces.Occupancy(state.turn, Piece::KING), Color::Opposite(state.turn));
     int32_t bestScore = (inCheck) ? -INFINITY_EVAL : m_Eval.Evaluate(state);
 
     // Update search terms
@@ -406,11 +408,45 @@ void Searcher::SetTimeControl(uint64_t seconds, uint64_t increment)
     m_TimeControlIncrement = increment;
 }
 
+void Searcher::TelemetryJSON(std::string& result) const 
+{
+    JUPITER_TRACE();
+
+    std::ostringstream ss;
+
+    ss << "{"
+        << "\"depth\":" << (int) m_LastSearchDepth << ","
+        << "\"nodesSearched\":" << m_LastNodesSearched << ","
+        << "\"nodesLookedUp\":" << m_LastNodesLookedUp << ","
+        << "\"nodesQuiesced\":" << m_LastNodesQuiesced << ","
+        << "\"pawnsLookedUp\":" << m_LastPawnsLookedUp << ","
+        << "\"evaluations\":" << m_LastEvaluations << ","
+        << "\"searchTime\":" << m_LastSearchTime 
+        << "}";
+
+    result = ss.str();
+}
+
+void Searcher::MetricsJSON(std::string& result) const 
+{
+    JUPITER_TRACE();
+
+    std::ostringstream ss;
+
+    ss << "{"
+        << "\"ttSize\":" << m_TranspositionTable.OccupancyBytes() << ","
+        << "\"ptSize\":" << m_Eval.GetPawnTableSize() << ","
+        << "\"bookMoves\":" << (int) m_BookMoves
+        << "}";
+
+    result = ss.str();
+}
+
 bool Searcher::IsCheckmate(const BoardState& state)
 {
     JUPITER_TRACE();
 
-    uint64_t kingBit = state.pieces.OccupancyMask(state.turn, Piece::KING);
+    uint64_t kingBit = state.pieces.Occupancy(state.turn, Piece::KING);
     return m_AttackTable.SquareUnderAttack(state, kingBit, Color::Opposite(state.turn));
 }
 
@@ -429,7 +465,7 @@ void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t
     // Iterate over TT entries to find the moves from here
     Movegen generator(state, m_AttackTable);
     for (uint8_t i = 1; i < depth; i++) {
-        TableEntry entry = m_TranspositionTable.Get(reconstructState.zobristKey);
+        TTEntry entry = m_TranspositionTable.Get(reconstructState.zobristKey);
         if (!entry.IsValid() || !entry.bestMove.IsValid())
             break;
 
@@ -472,7 +508,7 @@ Move Searcher::PickOpeningMove(const BoardState& state)
         return Move::Invalid();
     }
 
-    bookMoves++;
+    m_BookMoves++;
     return moves[m_FastRNG.Generate() % moves.Size()].first;
 }
 

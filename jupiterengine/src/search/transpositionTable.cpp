@@ -10,8 +10,8 @@ TranspositionTable::TranspositionTable()
 {
     JUPITER_TRACE();
 
-    m_Table = new PackedTableEntry[TRANSPOSITION_TABLE_SIZE];
-    std::memset(m_Table, 0, TRANSPOSITION_TABLE_SIZE * sizeof(PackedTableEntry));
+    m_Table = new TTEntryPacked[TRANSPOSITION_TABLE_SIZE];
+    std::memset(m_Table, 0, TRANSPOSITION_TABLE_SIZE * sizeof(TTEntryPacked));
 }
 
 TranspositionTable::~TranspositionTable()
@@ -19,42 +19,35 @@ TranspositionTable::~TranspositionTable()
     delete[] m_Table;
 }
 
-TableEntry TranspositionTable::Get(ZobristKey key)
+TTEntry TranspositionTable::Get(ZobristKey key)
 {
     JUPITER_TRACE();
 
-    uint64_t index = Index(key);
-    const PackedTableEntry& entry = m_Table[index];
+    std::size_t index = Index(key);
+    const TTEntryPacked& entry = m_Table[index];
     if (entry.hash == key)
-        return TableEntry(entry);
-    return TableEntry::Invalid();
+        return TTEntry(entry);
+    return TTEntry::Invalid();
 }
 
-void TranspositionTable::Save(const BoardState& state, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
+void TranspositionTable::Save(ZobristKey key, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
 {
     JUPITER_TRACE();
 
-    uint64_t index = Index(state.zobristKey);
-    const PackedTableEntry& oldEntry = m_Table[index];
+    std::size_t index = Index(key);
+    const TTEntryPacked& oldEntry = m_Table[index];
 
     if (!oldEntry.IsValid()) {
         m_Occupancy++;
-        m_Table[index] = PackedTableEntry(state.zobristKey, score, depth, bestMove, nodeType);
+        m_Table[index] = TTEntryPacked(key, score, depth, bestMove, nodeType);
         return;
     }
 
 #if ALWAYS_OVERWRITE
-    m_Table[index] = PackedTableEntry(state.zobristKey, score, depth, bestMove, nodeType);
+    m_Table[index] = PackedTableEntry(key, score, depth, bestMove, nodeType);
 #elif PREFER_DEPTH 
-    TableEntry oldEntryUnpacked(oldEntry);
+    TTEntry oldEntryUnpacked(oldEntry);
     if (depth >= oldEntryUnpacked.depth)
-        m_Table[index] = PackedTableEntry(state.zobristKey, score, depth, bestMove, nodeType);
+        m_Table[index] = TTEntryPacked(key, score, depth, bestMove, nodeType);
 #endif
-}
-
-uint64_t TranspositionTable::Index(ZobristKey key) const 
-{
-    JUPITER_TRACE();
-
-    return key & (TRANSPOSITION_TABLE_SIZE - 1);
 }

@@ -69,6 +69,8 @@ namespace fen {
 
         // Read piece positions
         {
+            res.pieces.Clear();
+
             uint64_t boardIndex = 0;
             for (uint64_t i = 0; i < 8; i++) {
                 const FenView& v = views[i];
@@ -123,8 +125,9 @@ namespace fen {
 
         // Read castling rights
         {
-            const FenView& v = views[9];
             res.rights = 0;
+
+            const FenView& v = views[9];
 
             if (fen[v.start] != '-') {
                 for (uint64_t i = v.start; i < v.end; i++) {

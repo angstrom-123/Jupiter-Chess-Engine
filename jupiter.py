@@ -52,9 +52,11 @@ class Jupiter(BaseEngine):
     - avg Nodes Quiesced  : {(self.telemetry["nodesQuiesced"] / self.n_searches) / 1_000_000:.3f}M
     - avg Search Speed    : {self.telemetry["nodesSearched"] / (self.telemetry["searchTime"] * 1000):.3f}mnps 
     - avg Quiescence %    : {(self.telemetry["nodesQuiesced"] / self.telemetry["nodesSearched"]) * 100:.3f}%
-    - avg Lookup %        : {(self.telemetry["nodesLookedUp"] / self.telemetry["nodesSearched"]) * 100:.3f}%
     - avg Completed Depth : {self.telemetry["depth"] / self.n_searches:.3f}
+    - avg Lookup %        : {(self.telemetry["nodesLookedUp"] / self.telemetry["nodesSearched"]) * 100:.3f}%
+    - avg Pawn Lookup %   : {(self.telemetry["pawnsLookedUp"] / self.telemetry["evaluations"]) * 100:.3f}%
     - TT Occupancy        : {metrics["ttSize"] / (1024 * 1024):.3f}MiB
+    - PT Occupancy        : {metrics["ptSize"] / (1024 * 1024):.3f}MiB
     - Book Moves          : {metrics["bookMoves"]}
     - Searches Completed  : {self.n_searches}
 """)

@@ -13,7 +13,7 @@ namespace fs = std::filesystem;
 #define USE_LUMBRAS_BOOK true
 
 // TODO: Tune the weight factor so that we play from book, but avoid the really bad moves still
-const float WEIGHT_FACTOR = 0.80; // Only allow moves within 20% of best move in whole book
+const float WEIGHT_FACTOR = 0.70; // Only allow moves within 30% of best move in whole book
 const uint64_t POLYGLOT_ENTRY_SIZE = 16;
 
 #if USE_LUMBRAS_BOOK
@@ -373,7 +373,7 @@ ZobristKey OpeningBook::ZobristHash(const BoardState& state) const
     for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
         for (uint8_t i = Color::MAX_ENUM; i > Color::WHITE; i--) {
             Color::Value color = static_cast<Color::Value>(i - 1);
-            Bitboard occupancy = state.pieces.OccupancyMask(color, piece);
+            Bitboard occupancy = state.pieces.Occupancy(color, piece);
             while (occupancy) {
                 uint8_t index = std::countr_zero(occupancy);
                 index = (7 - index / 8) * 8 + (index & 7); // polyglot y axis is opposite
@@ -413,7 +413,7 @@ ZobristKey OpeningBook::ZobristHash(const BoardState& state) const
         uint64_t adjacentMask = 0;
         if (file > 0) adjacentMask |= (1ull << (square - 1));
         if (file < 7) adjacentMask |= (1ull << (square + 1));
-        if (adjacentMask & state.pieces.OccupancyMask(state.turn, Piece::PAWN))
+        if (adjacentMask & state.pieces.Occupancy(state.turn, Piece::PAWN))
             key ^= randoms[offset + file];
     }
     offset += 8;

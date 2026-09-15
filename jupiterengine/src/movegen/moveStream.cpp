@@ -127,6 +127,6 @@ void MoveStream::OrderQuiets()
     JUPITER_TRACE();
 
     std::sort(m_Quiets.begin(), m_Quiets.end(), [this](const Move& a, const Move& b) {
-        return *m_HistoryTable[a.from][a.to] > *m_HistoryTable[b.from][b.to];
+        return (*m_HistoryTable)[a.from][a.to] > (*m_HistoryTable)[b.from][b.to];
     });
 }

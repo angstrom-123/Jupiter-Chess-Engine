@@ -36,6 +36,7 @@ struct Move {
 
 struct MoveData {
     ZobristKey zobristKey;
+    ZobristKey pawnKey;
     Move move{Move::Invalid()};
     Piece::Value capture{Piece::Invalid()};
     CastlingRights rights{0};

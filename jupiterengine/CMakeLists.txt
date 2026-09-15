@@ -15,7 +15,6 @@ string(APPEND CMAKE_CXX_FLAGS_PROFILE " -O3 -g -fno-omit-frame-pointer -fno-opti
 find_package(Python3 COMPONENTS Development REQUIRED)
 
 set(SOURCES
-    src/core.cpp 
     src/pythonModule.cpp
     src/board/bitboard.cpp 
     src/board/boardState.cpp
@@ -25,6 +24,8 @@ set(SOURCES
     src/evaluation/pieceSquareTable.cpp
     src/evaluation/distanceTable.cpp
     src/evaluation/evaluator.cpp
+    src/evaluation/pawnTable.cpp
+    src/evaluation/maskTable.cpp
     src/movegen/move.cpp
     src/movegen/attackTable.cpp
     src/movegen/movegen.cpp

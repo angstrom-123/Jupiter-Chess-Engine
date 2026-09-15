@@ -7,16 +7,9 @@
 #include <iostream>
 #include <iterator>
 #include <bit>
-#include <array>
 #include "board/boardState.h"
 #include "util/instrumenter.h"
 #include "util/rng.h"
-
-const std::array<int8_t[2], 2> PAWN_ATTACKS = {{ { 1, 1 }, { -1, 1 } }}; // Subject to direction
-const std::array<int8_t[2], 8> KNIGHT_ATTACKS = {{ { 1, 2 }, { 2, 1 }, { 2, -1 }, { 1, -2 }, { -1, -2 }, { -2, -1 }, { -2, 1 }, { -1, 2 } }};
-const std::array<int8_t[2], 4> BISHOP_ATTACKS = {{ { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } }};
-const std::array<int8_t[2], 4> ROOK_ATTACKS = {{ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }};
-const std::array<int8_t[2], 8> KING_ATTACKS = {{ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } }};
 
 static const fs::path MAGIC_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "magics.bin";
 
@@ -35,46 +28,50 @@ bool AttackTable::SquareUnderAttack(const BoardState& state, uint64_t bit, Color
     JUPITER_TRACE();
 
     uint8_t index = std::countr_zero(bit);
-    Bitboard occupancy = state.pieces.OccupancyMask();
+    Bitboard occupancy = state.pieces.Occupancy();
 
-    return (GetQueenAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::QUEEN))
-        | (GetRookAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::ROOK))
-        | (GetBishopAttacks(index, occupancy) & state.pieces.OccupancyMask(color, Piece::BISHOP))
-        | (GetKnightAttacks(index) & state.pieces.OccupancyMask(color, Piece::KNIGHT))
-        | (GetPawnAttacks(index, Color::Opposite(color)) & state.pieces.OccupancyMask(color, Piece::PAWN))
-        | (GetKingAttacks(index) & state.pieces.OccupancyMask(color, Piece::KING));
+    return (QueenAttacks(index, occupancy) & state.pieces.Occupancy(color, Piece::QUEEN))
+        | (RookAttacks(index, occupancy) & state.pieces.Occupancy(color, Piece::ROOK))
+        | (BishopAttacks(index, occupancy) & state.pieces.Occupancy(color, Piece::BISHOP))
+        | (KnightAttacks(index) & state.pieces.Occupancy(color, Piece::KNIGHT))
+        | (PawnAttacks(index, Color::Opposite(color)) & state.pieces.Occupancy(color, Piece::PAWN))
+        | (KingAttacks(index) & state.pieces.Occupancy(color, Piece::KING));
 }
 
-Bitboard AttackTable::GetPawnAttacks(uint8_t index, Color::Value color) const 
+Bitboard AttackTable::PawnAttacks(uint8_t index, Color::Value color) const 
 {
     return m_PawnTables[color][index];
 }
 
-Bitboard AttackTable::GetKnightAttacks(uint8_t index) const 
+Bitboard AttackTable::KnightAttacks(uint8_t index) const 
 {
     return m_KnightTables[index];
 }
 
-Bitboard AttackTable::GetBishopAttacks(uint8_t index, Bitboard occupancy) const 
+Bitboard AttackTable::BishopAttacks(uint8_t index, Bitboard occupancy) const 
 {
+    JUPITER_TRACE();
+
     Bitboard blockers = occupancy & m_BishopData.masks[index];
     uint16_t tableIndex = static_cast<uint16_t>((blockers * m_BishopData.magics[index]) >> m_BishopData.shifts[index]);
     return m_BishopData.tables[index][tableIndex];
 }
 
-Bitboard AttackTable::GetRookAttacks(uint8_t index, Bitboard occupancy) const
+Bitboard AttackTable::RookAttacks(uint8_t index, Bitboard occupancy) const
 {
+    JUPITER_TRACE();
+
     Bitboard blockers = occupancy & m_RookData.masks[index];
     uint16_t tableIndex = static_cast<uint16_t>((blockers * m_RookData.magics[index]) >> m_RookData.shifts[index]);
     return m_RookData.tables[index][tableIndex];
 }
 
-Bitboard AttackTable::GetQueenAttacks(uint8_t index, Bitboard occupancy) const 
+Bitboard AttackTable::QueenAttacks(uint8_t index, Bitboard occupancy) const 
 {
-    return GetBishopAttacks(index, occupancy) | GetRookAttacks(index, occupancy);
+    return BishopAttacks(index, occupancy) | RookAttacks(index, occupancy);
 }
 
-Bitboard AttackTable::GetKingAttacks(uint8_t index) const 
+Bitboard AttackTable::KingAttacks(uint8_t index) const 
 {
     return m_KingTables[index];
 }
@@ -183,10 +180,9 @@ void AttackTable::GenerateSliderTables()
             m_RookData.masks[i] = GenerateSliderMask(i, ROOK_ATTACKS);
             m_RookData.shifts[i] = 64 - std::popcount(m_RookData.masks[i]);
             if (!m_MagicsLoadedFromFile)
-                m_RookData.magics[i] = FindMagic(i, rng, Piece::ROOK);
+                m_RookData.magics[i] = FindMagic<Piece::ROOK>(i, rng);
 
-            uint64_t rookSize = 1ull << (64 - m_RookData.shifts[i]);
-            m_RookData.tables[i].resize(rookSize);
+            m_RookData.tables[i] = &m_RookData.tableMemory[(1ull << 12) * i];
             Bitboard rookSub = m_RookData.masks[i];
             do {
                 uint16_t index = static_cast<uint16_t>((rookSub * m_RookData.magics[i]) >> m_RookData.shifts[i]);
@@ -200,10 +196,9 @@ void AttackTable::GenerateSliderTables()
             m_BishopData.masks[i] = GenerateSliderMask(i, BISHOP_ATTACKS);
             m_BishopData.shifts[i] = 64 - std::popcount(m_BishopData.masks[i]);
             if (!m_MagicsLoadedFromFile)
-                m_BishopData.magics[i] = FindMagic(i, rng, Piece::BISHOP);
+                m_BishopData.magics[i] = FindMagic<Piece::BISHOP>(i, rng);
 
-            uint64_t bishopSize = 1ull << (64 - m_BishopData.shifts[i]);
-            m_BishopData.tables[i].resize(bishopSize);
+            m_BishopData.tables[i] = &m_BishopData.tableMemory[(1ull << 9) * i];
             Bitboard bishopSub = m_BishopData.masks[i];
             do {
                 uint16_t index = static_cast<uint16_t>((bishopSub * m_BishopData.magics[i]) >> m_BishopData.shifts[i]);
@@ -219,7 +214,7 @@ void AttackTable::GenerateSliderTables()
     }
 }
 
-Bitboard AttackTable::GenerateSliderMask(uint8_t index, const std::array<int8_t[2], 4>& deltas)
+Bitboard AttackTable::GenerateSliderMask(uint8_t index, const int8_t (& deltas)[4][2])
 {
     JUPITER_TRACE();
 
@@ -247,7 +242,7 @@ Bitboard AttackTable::GenerateSliderMask(uint8_t index, const std::array<int8_t[
     return mask;
 }
 
-Bitboard AttackTable::GenerateSliderAttacks(uint8_t index, Bitboard occupancy, const std::array<int8_t[2], 4>& deltas)
+Bitboard AttackTable::GenerateSliderAttacks(uint8_t index, Bitboard occupancy, const int8_t (& deltas)[4][2])
 {
     JUPITER_TRACE();
 
@@ -271,51 +266,3 @@ Bitboard AttackTable::GenerateSliderAttacks(uint8_t index, Bitboard occupancy, c
     return mask;
 }
 
-Bitboard AttackTable::FindMagic(uint8_t index, RomuQuadRandom& rng, Piece::Value piece, uint64_t maxAttempts)
-{
-    JUPITER_TRACE();
-
-    const SliderData& data = (piece == Piece::ROOK) ? m_RookData : m_BishopData;
-
-    auto SparseRandom = [&rng]() {
-        uint64_t random;
-        do {
-            random = rng.Generate() & rng.Generate() & rng.Generate();
-        } while (std::popcount(random) < 6);
-        return random;
-    };
-
-    Bitboard mask = data.masks[index];
-    uint8_t bitCount = std::popcount(mask); 
-
-    Buffer<Bitboard, 1ull << 12> occupancies;
-    Bitboard sub = mask;
-    do {
-        occupancies.PushBack(sub);
-        sub = (sub - 1) & mask;
-    } while (sub != mask);
-
-    Buffer<Bitboard, 1ull << 12> usedAttacks(1ull << 12);
-    for (uint64_t attempt = 0; attempt < maxAttempts; attempt++) {
-        uint64_t magic = SparseRandom();
-
-        std::fill(usedAttacks.begin(), usedAttacks.end(), 0);
-        for (const auto occupancy : occupancies) {
-            uint16_t magicIndex = static_cast<uint16_t>((occupancy * magic) >> (64 - bitCount));
-            Bitboard attacks = (piece == Piece::ROOK) 
-                ? GenerateSliderAttacks(index, occupancy, ROOK_ATTACKS)
-                : GenerateSliderAttacks(index, occupancy, BISHOP_ATTACKS);
-
-            if (usedAttacks[magicIndex] == 0)
-                usedAttacks[magicIndex] = attacks;
-            else if (usedAttacks[magicIndex] != attacks)
-                goto failed;
-        }
-        return magic;
-
-        failed:
-            continue;
-    }
-
-    return 0;
-}

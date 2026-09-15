@@ -6,8 +6,16 @@
 #include <cstdlib>
 #include <string>
 
-uint8_t ToIndex(uint8_t x, uint8_t y);
-uint8_t Difference(uint8_t a, uint8_t b);
+#ifdef _MSC_VER 
+    #define INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+    #define INLINE inline __attribute__((always_inline))
+#else 
+    #define INLINE inline
+#endif
+
+INLINE uint8_t ToIndex(uint8_t x, uint8_t y) { return x + 8 * y; }
+INLINE uint8_t Difference(uint8_t a, uint8_t b) { return (a > b) ? a - b : b - a; }
 
 struct Color {
     typedef enum : uint8_t {
@@ -18,9 +26,9 @@ struct Color {
 
     static constexpr Buffer<Color::Value, Color::MAX_ENUM> values{Color::WHITE, Color::BLACK};
 
-    static Value Invalid() { return Value::MAX_ENUM; }
-    static bool IsValid(Value value) { return value < Value::MAX_ENUM; }
-    static Value Opposite(Value value) 
+    INLINE static Value Invalid() { return Value::MAX_ENUM; }
+    INLINE static bool IsValid(Value value) { return value < Value::MAX_ENUM; }
+    INLINE static Value Opposite(Value value) 
     { 
         switch (value) {
             case Value::WHITE: return Value::BLACK;
@@ -51,34 +59,16 @@ struct Piece {
 
     static constexpr Buffer<Piece::Value, Piece::MAX_ENUM> values{Piece::PAWN, Piece::KNIGHT, Piece::BISHOP, Piece::ROOK, Piece::QUEEN, Piece::KING};
 
-    static Value Invalid() { return Value::MAX_ENUM; }
-    static bool IsValid(Value value) { return value < Value::MAX_ENUM; }
-    static const char *Show(Value value)
-    {
-        switch (value) {
-            case PAWN: return "Pawn";
-            case KNIGHT: return "Knight";
-            case BISHOP: return "Bishop";
-            case ROOK: return "Rook";
-            case QUEEN: return "Queen";
-            case KING: return "King";
-            default: return "None";
-        }
-    }
-    static int32_t Evaluate(Value value) 
-    {
-        switch (value) {
-            case PAWN: return 100;
-            case KNIGHT: return 300;
-            case BISHOP: return 310;
-            case ROOK: return 500;
-            case QUEEN: return 975;
-            case KING: return 0;
-            default: throw JupiterException(std::string("Evaluating invalid piece: ") + Piece::Show(value));
-        }
-    }
+    INLINE static Value Invalid() { return Value::MAX_ENUM; }
+    INLINE static bool IsValid(Value value) { return value < Value::MAX_ENUM; }
+    static const char *Show(Value value) { return m_Names[value]; }
+    INLINE static int32_t Evaluate(Value value) { return m_Evals[value]; }
+
+private:
+    static constexpr int32_t m_Evals[Piece::MAX_ENUM] = { 100, 300, 310, 500, 975, 0 };
+    static constexpr const char *m_Names[Piece::MAX_ENUM + 1] = { "Pawn", "Knight", "Bishop", "Rook", "Queen", "King", "None" };
 };
-inline Piece::Value operator++(Piece::Value& value, int)
+INLINE Piece::Value operator++(Piece::Value& value, int)
 {
     Piece::Value original = value;
     value = static_cast<Piece::Value>(static_cast<uint8_t>(value) + 1);
@@ -93,6 +83,7 @@ struct CastlingRight {
         QUEENSIDE_WHITE = 0x4,
         QUEENSIDE_BLACK = 0x8,
     } Value;
+    INLINE static CastlingRights All() { return KINGSIDE_WHITE | KINGSIDE_BLACK | QUEENSIDE_WHITE | QUEENSIDE_BLACK; }
     static Value Kingside(Color::Value color)
     {
         switch (color) {

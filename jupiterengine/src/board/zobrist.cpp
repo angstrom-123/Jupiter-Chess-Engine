@@ -28,7 +28,7 @@ ZobristKey Zobrist::ComputeKey(const BoardState& state) const
     // Pieces
     for (const Color::Value color : { Color::WHITE, Color::BLACK }) {
         for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
-            Bitboard occupancy = state.pieces.OccupancyMask(color, piece);
+            Bitboard occupancy = state.pieces.Occupancy(color, piece);
             while (occupancy) {
                 uint8_t index = std::countr_zero(occupancy);
                 key ^= m_Randoms[offset + index];
@@ -66,7 +66,7 @@ ZobristKey Zobrist::ComputeKey(const BoardState& state) const
         uint64_t adjacentMask = 0;
         if (file > 0) adjacentMask |= (1ull << (square - 1));
         if (file < 7) adjacentMask |= (1ull << (square + 1));
-        if (adjacentMask & state.pieces.OccupancyMask(state.turn, Piece::PAWN))
+        if (adjacentMask & state.pieces.Occupancy(state.turn, Piece::PAWN))
             key ^= m_Randoms[offset + file];
     }
     offset += 8;
@@ -75,6 +75,27 @@ ZobristKey Zobrist::ComputeKey(const BoardState& state) const
     if (state.turn == Color::BLACK)
         key ^= m_Randoms[offset];
     offset++;
+
+    return key;
+}
+
+ZobristKey Zobrist::ComputePawnKey(const BoardState& state) const
+{
+    JUPITER_TRACE();
+
+    ZobristKey key = 0;
+    uint64_t offset = 0;
+
+    // Pieces
+    for (const Color::Value color : { Color::WHITE, Color::BLACK }) {
+        Bitboard occupancy = state.pieces.Occupancy(color, Piece::PAWN);
+        while (occupancy) {
+            uint8_t index = std::countr_zero(occupancy);
+            key ^= m_Randoms[offset + index];
+            occupancy &= (occupancy - 1);
+        }
+        offset += (64 * 6);
+    }
 
     return key;
 }

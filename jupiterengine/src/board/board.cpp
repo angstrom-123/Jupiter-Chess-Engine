@@ -18,26 +18,21 @@ namespace libjupiter {
         JUPITER_TRACE();
 
         if (fen == nullptr)
-        {
-            m_State.pieces.StartPos();
-            m_State.rights = CastlingRight::KINGSIDE_BLACK | 
-                CastlingRight::KINGSIDE_WHITE |
-                CastlingRight::QUEENSIDE_BLACK |
-                CastlingRight::QUEENSIDE_WHITE,
-            m_State.turn = Color::WHITE;
-            m_State.enPassantIndex = UINT8_MAX;
-            m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
-            ComputePSTScore();
-            return;
-        }
+            StartPos();
+        else
+            fen::Parse(fen, &m_HalfMoves, &m_FullMoves, m_State);
 
-        Clear();
-        fen::Parse(fen, &m_HalfMoves, &m_FullMoves, m_State);
-
-        // Save initial board state to history
-        m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
-        m_History.Push(m_State);
         ComputePSTScore();
+
+        m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
+        m_State.pawnKey = m_Zobrist.ComputePawnKey(m_State);
+
+        m_History.Push(m_State);
+    }
+
+    Board::~Board()
+    {
+        delete m_Searcher;
     }
 
     // Now doing incremental updates so need to initialise it
@@ -48,7 +43,7 @@ namespace libjupiter {
         m_State.pstScore = PSTScore(0, 0);
         for (Color::Value color : { Color::WHITE, Color::BLACK }) {
             for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
-                Bitboard occupancy = m_State.pieces.OccupancyMask(color, piece);
+                Bitboard occupancy = m_State.pieces.Occupancy(color, piece);
                 while (occupancy) {
                     uint8_t index = std::countr_zero(occupancy);
                     m_State.pstScore += m_PieceSquareTables.Get(color, piece, index);
@@ -62,14 +57,14 @@ namespace libjupiter {
     {
         JUPITER_TRACE();
 
-        m_Searcher.SetTimeControl(seconds, increment);
+        m_Searcher->SetTimeControl(seconds, increment);
     }
 
     Move Board::Go(uint64_t moveMs)
     {
         JUPITER_TRACE();
 
-        return m_Searcher.FindBest(m_State, m_History, moveMs);
+        return m_Searcher->FindBest(m_State, m_History, moveMs);
     }
 
     void Board::MakeMove(LongAlgebraicMove lan)
@@ -92,31 +87,14 @@ namespace libjupiter {
     {
         JUPITER_TRACE();
 
-        std::ostringstream ss;
-
-        ss << "{"
-            << "\"depth\":" << (int) m_Searcher.searchDepth << ","
-            << "\"nodesSearched\":" << m_Searcher.nodesSearched << ","
-            << "\"nodesLookedUp\":" << m_Searcher.nodesLookedUp << ","
-            << "\"nodesQuiesced\":" << m_Searcher.nodesQuiesced << ","
-            << "\"searchTime\":" << m_Searcher.searchTime 
-            << "}";
-
-        result = ss.str();
+        m_Searcher->TelemetryJSON(result);
     }
 
     void Board::GetMetrics(std::string& result)
     {
         JUPITER_TRACE();
 
-        std::ostringstream ss;
-
-        ss << "{"
-            << "\"ttSize\":" << m_Searcher.ttSize << ","
-            << "\"bookMoves\":" << (int) m_Searcher.bookMoves
-            << "}";
-
-        result = ss.str();
+        m_Searcher->MetricsJSON(result);
     }
 
     void Board::Show(std::string& result)
@@ -151,12 +129,12 @@ namespace libjupiter {
         result = ss.str();
     }
 
-    void Board::Clear()
+    void Board::StartPos()
     {
         JUPITER_TRACE();
 
-        m_State.pieces = BitboardSet{};
-        m_State.rights = CastlingRights{};
+        m_State.pieces = BitboardSet();
+        m_State.rights = CastlingRight::All();
         m_State.turn = Color::WHITE;
         m_State.enPassantIndex = UINT8_MAX;
         m_HalfMoves = 0;

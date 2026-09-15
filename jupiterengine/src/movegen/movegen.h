@@ -28,13 +28,13 @@ public:
         constexpr int8_t shiftLeft = (color == Color::WHITE) ? 9 : -7;
         constexpr int8_t shiftRight = (color == Color::WHITE) ? 7 : -9;
         if constexpr (color == Color::WHITE) {
-            Bitboard targetBits = state.pieces.OccupancyMask(Color::BLACK) | enPassantBit;
-            Bitboard pawns = state.pieces.OccupancyMask(Color::WHITE, Piece::PAWN);
+            Bitboard targetBits = state.pieces.Occupancy(Color::BLACK) | enPassantBit;
+            Bitboard pawns = state.pieces.Occupancy(Color::WHITE, Piece::PAWN);
             captureLeft = ((pawns & ~A_FILE_MASK) >> 9) & targetBits;
             captureRight = ((pawns & ~H_FILE_MASK) >> 7)  & targetBits;
         } else if constexpr (color == Color::BLACK)  {
-            Bitboard targetBits = state.pieces.OccupancyMask(Color::WHITE) | enPassantBit;
-            Bitboard pawns = state.pieces.OccupancyMask(Color::BLACK, Piece::PAWN);
+            Bitboard targetBits = state.pieces.Occupancy(Color::WHITE) | enPassantBit;
+            Bitboard pawns = state.pieces.Occupancy(Color::BLACK, Piece::PAWN);
             captureLeft = ((pawns & ~A_FILE_MASK) << 7) & targetBits;
             captureRight = ((pawns & ~H_FILE_MASK) << 9)  & targetBits;
         } else {
@@ -88,8 +88,8 @@ public:
         Bitboard RANK_3_MASK = 0b00000000'00000000'11111111'00000000'00000000'00000000'00000000'00000000;
         Bitboard RANK_6_MASK = 0b00000000'00000000'00000000'00000000'00000000'11111111'00000000'00000000;
 
-        Bitboard pawns = state.pieces.OccupancyMask(color, Piece::PAWN);
-        Bitboard occupancy = state.pieces.OccupancyMask();
+        Bitboard pawns = state.pieces.Occupancy(color, Piece::PAWN);
+        Bitboard occupancy = state.pieces.Occupancy();
 
         Bitboard singlePush;
         Bitboard doublePush;
@@ -146,13 +146,13 @@ public:
         Bitboard captureLeft;
         Bitboard captureRight;
         if constexpr (color == Color::WHITE) {
-            Bitboard targetBits = state.pieces.OccupancyMask(Color::BLACK) | enPassantBit;
-            Bitboard pawns = state.pieces.OccupancyMask(Color::WHITE, Piece::PAWN);
+            Bitboard targetBits = state.pieces.Occupancy(Color::BLACK) | enPassantBit;
+            Bitboard pawns = state.pieces.Occupancy(Color::WHITE, Piece::PAWN);
             captureLeft = ((pawns & ~A_FILE_MASK) >> 9) & targetBits;
             captureRight = ((pawns & ~H_FILE_MASK) >> 7)  & targetBits;
         } else if constexpr (color == Color::BLACK)  {
-            Bitboard targetBits = state.pieces.OccupancyMask(Color::WHITE) | enPassantBit;
-            Bitboard pawns = state.pieces.OccupancyMask(Color::BLACK, Piece::PAWN);
+            Bitboard targetBits = state.pieces.Occupancy(Color::WHITE) | enPassantBit;
+            Bitboard pawns = state.pieces.Occupancy(Color::BLACK, Piece::PAWN);
             captureLeft = ((pawns & ~A_FILE_MASK) << 7) & targetBits;
             captureRight = ((pawns & ~H_FILE_MASK) << 9)  & targetBits;
         } else {
@@ -173,8 +173,8 @@ public:
         Bitboard RANK_3_MASK = 0b00000000'00000000'00000000'00000000'00000000'11111111'00000000'00000000;
         Bitboard RANK_6_MASK = 0b00000000'00000000'11111111'00000000'00000000'00000000'00000000'00000000;
 
-        Bitboard pawns = state.pieces.OccupancyMask(color, Piece::PAWN);
-        Bitboard occupancy = state.pieces.OccupancyMask();
+        Bitboard pawns = state.pieces.Occupancy(color, Piece::PAWN);
+        Bitboard occupancy = state.pieces.Occupancy();
 
         Bitboard singlePush;
         Bitboard doublePush;

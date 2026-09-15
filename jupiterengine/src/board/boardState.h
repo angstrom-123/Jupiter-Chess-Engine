@@ -9,11 +9,12 @@ class BoardState {
 public:
     BitboardSet pieces;
     ZobristKey zobristKey;
+    ZobristKey pawnKey;
+    PSTScore pstScore{PSTScore(0, 0)};
     CastlingRights rights{0};
     Color::Value turn{Color::WHITE};
     uint8_t enPassantIndex{UINT8_MAX};
     uint8_t fiftyMoveCounter{0};
-    PSTScore pstScore{PSTScore(0, 0)};
 
     MoveData MakeMove(const Zobrist& zobrist, const PieceSquareTables& pst, Move move);
     void UnmakeMove(MoveData moveData);

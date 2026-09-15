@@ -44,8 +44,7 @@ namespace py {
         JUPITER_TRACE();
 
         Board *self = reinterpret_cast<Board *>(type->tp_alloc(type, 0));
-        if (self)
-            self->board = nullptr;
+        if (self) self->board = nullptr;
         return reinterpret_cast<PyObject *>(self);
     }
 
