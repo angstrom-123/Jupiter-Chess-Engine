@@ -18,6 +18,10 @@ Written to integrate directly with [Jupiter Client](https://github.com/angstrom-
 
 ### Build the Library
 
+> [!NOTE]
+> Build is not currently working for windows. This is a work in progress. Build 
+> is also untested on MacOS but should be working fine.
+
 Compile the library code into a dll:
 
 ```bash
@@ -30,15 +34,6 @@ cd ../..
 ```
 
 Valid `CMAKE_BUILD_TYPE`'s are: 
-- Release (fastest)
-- Debug (no optimisation + debugging symbols + tracing)
-- Trace (optimised + tracing)
-- Profile (optimised + profiling)
-
-### Test the Engine
-
-Run the example file:
-
-```bash 
-python3 example.py
-```
+- Release (optimised, fastest)
+- Debug (no optimisation + debugging symbols + manual tracing)
+- Profile (optimised + debugging symbols + trace symbols for perf)
