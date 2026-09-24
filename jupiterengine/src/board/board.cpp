@@ -4,6 +4,7 @@
 #include <sstream>
 #include <string>
 
+#include "evaluation/evaluator.h"
 #include "util/fenParser.h"
 #include "libjupiter/board.h"
 #include "core.h"
@@ -53,7 +54,7 @@ namespace libjupiter {
         }
     }
 
-    void Board::SetTimeControl(uint64_t seconds, uint64_t increment)
+    void Board::SetTimeControl(float seconds, float increment)
     {
         JUPITER_TRACE();
 
@@ -83,21 +84,35 @@ namespace libjupiter {
             m_FullMoves++;
     }
 
-    void Board::GetTelemetry(std::string& result)
+    void Board::SetWeights(const EvaluatorConstants& weights)
+    {
+        JUPITER_TRACE();
+
+        m_Searcher->TuneEval(weights);
+    }
+
+    EvaluatorConstants Board::GetWeights() const
+    {
+        JUPITER_TRACE();
+
+        return m_Searcher->EvalWeights();
+    }
+
+    void Board::GetTelemetry(std::string& result) const
     {
         JUPITER_TRACE();
 
         m_Searcher->TelemetryJSON(result);
     }
 
-    void Board::GetMetrics(std::string& result)
+    void Board::GetMetrics(std::string& result) const
     {
         JUPITER_TRACE();
 
         m_Searcher->MetricsJSON(result);
     }
 
-    void Board::Show(std::string& result)
+    void Board::Show(std::string& result) const
     {
         JUPITER_TRACE();
 

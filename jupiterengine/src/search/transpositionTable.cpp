@@ -3,9 +3,6 @@
 #include <cstring>
 #include "util/instrumenter.h"
 
-#define ALWAYS_OVERWRITE false 
-#define PREFER_DEPTH true
-
 TranspositionTable::TranspositionTable()
 {
     JUPITER_TRACE();
@@ -24,13 +21,13 @@ TTEntry TranspositionTable::Get(ZobristKey key)
     JUPITER_TRACE();
 
     std::size_t index = Index(key);
-    const TTEntryPacked& entry = m_Table[index];
-    if (entry.hash == key)
+    TTEntryPacked& entry = m_Table[index];
+    if (entry.IsValid() && entry.hash == key)
         return TTEntry(entry);
     return TTEntry::Invalid();
 }
 
-void TranspositionTable::Save(ZobristKey key, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
+void TranspositionTable::Save(ZobristKey key, uint8_t halfMove, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
 {
     JUPITER_TRACE();
 
@@ -39,15 +36,13 @@ void TranspositionTable::Save(ZobristKey key, int32_t score, uint8_t depth, Move
 
     if (!oldEntry.IsValid()) {
         m_Occupancy++;
-        m_Table[index] = TTEntryPacked(key, score, depth, bestMove, nodeType);
-        return;
+        m_Table[index] = TTEntryPacked(key, halfMove, score, depth, bestMove, nodeType);
+    } else {
+        TTEntry oldEntryUnpacked(oldEntry);
+        uint8_t ageDifference = (halfMove - oldEntryUnpacked.age) & 15;
+        int32_t oldScore = (static_cast<int32_t>(oldEntryUnpacked.depth) << 2) - static_cast<int32_t>(ageDifference);
+        int32_t newScore = static_cast<int32_t>(depth) << 2;
+        if (newScore >= oldScore)
+            m_Table[index] = TTEntryPacked(key, halfMove, score, depth, bestMove, nodeType);
     }
-
-#if ALWAYS_OVERWRITE
-    m_Table[index] = PackedTableEntry(key, score, depth, bestMove, nodeType);
-#elif PREFER_DEPTH 
-    TTEntry oldEntryUnpacked(oldEntry);
-    if (depth >= oldEntryUnpacked.depth)
-        m_Table[index] = TTEntryPacked(key, score, depth, bestMove, nodeType);
-#endif
 }

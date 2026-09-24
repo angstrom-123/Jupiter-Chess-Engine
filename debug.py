@@ -3,11 +3,29 @@
 import json
 
 from jupiterengine.build.libjupiter import Board
+from helpers import denormalise_weights, assign_weights
 
-# TODO: Test the doubled pawn detection
 board: Board = Board("8/8/1kp5/2p5/2ppp2P/7P/P3PK2/8 w - - 0 1")
 
-print(repr(board))
+weights = {
+    "material_weight": 0.8991150552298602,
+    "pst_weight": 0.41603960381524296,
+    "mopup_proximity_factor": -0.16725139238580378,
+    "mopup_edge_factor": 0.28504942391066634,
+    "king_mobility_factor":	-0.22357966979910618,
+    "mobility_factor": 0.12925671194510954,
+    "king_pawn_tropism_regular_factor":	-0.11836980155952265,
+    "king_pawn_tropism_weak_factor": 0.300877706269155,
+    "king_pawn_tropism_passed_factor": 0.21847747195030476,
+    "missing_shield_pawn_factor": -0.28571919703989335,
+    "storming_pawn_factor":	-0.11967683013618044,
+    "slider_open_file_factor": 0.4384669289695806,
+    "weak_pawn_factor":	-0.22724635994739126,
+    "connected_pawn_factor": 0.9938567030945792
+}
+
+assign_weights(board, denormalise_weights(weights))
+print(board.get_weights())
 
 # telemetry: dict = {}
 # n_searches: int = 0

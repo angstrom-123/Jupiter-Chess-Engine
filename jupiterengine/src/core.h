@@ -1,10 +1,8 @@
 #pragma once
 
 #include "datastructure/buffer.h"
-#include "util/exception.h"
 #include <cstdint>
 #include <cstdlib>
-#include <string>
 
 #ifdef _MSC_VER 
     #define INLINE __forceinline
@@ -27,14 +25,10 @@ struct Color {
     static constexpr Buffer<Color::Value, Color::MAX_ENUM> values{Color::WHITE, Color::BLACK};
 
     INLINE static Value Invalid() { return Value::MAX_ENUM; }
-    INLINE static bool IsValid(Value value) { return value < Value::MAX_ENUM; }
-    INLINE static Value Opposite(Value value) 
+    INLINE static bool IsValid(Value color) { return color < Value::MAX_ENUM; }
+    INLINE static Value Opposite(Value color) 
     { 
-        switch (value) {
-            case Value::WHITE: return Value::BLACK;
-            case Value::BLACK: return Value::WHITE;
-            default: throw JupiterException(std::string("Getting opposite of invalid colour: ") + Color::Show(value));
-        }
+        return static_cast<Value>(1 - color);
     }
     static const char *Show(Value value)
     {
@@ -83,22 +77,14 @@ struct CastlingRight {
         QUEENSIDE_WHITE = 0x4,
         QUEENSIDE_BLACK = 0x8,
     } Value;
-    INLINE static CastlingRights All() { return KINGSIDE_WHITE | KINGSIDE_BLACK | QUEENSIDE_WHITE | QUEENSIDE_BLACK; }
-    static Value Kingside(Color::Value color)
+    INLINE static consteval CastlingRights All() { return KINGSIDE_WHITE | KINGSIDE_BLACK | QUEENSIDE_WHITE | QUEENSIDE_BLACK; }
+    INLINE static Value Kingside(Color::Value color)
     {
-        switch (color) {
-            case Color::WHITE: return KINGSIDE_WHITE;
-            case Color::BLACK: return KINGSIDE_BLACK;
-            default: throw JupiterException(std::string("Getting kingside castling right for invalid colour: ") + Color::Show(color));
-        }
+        return static_cast<Value>(1 + color);
     }
-    static Value Queenside(Color::Value color)
+    INLINE static Value Queenside(Color::Value color)
     {
-        switch (color) {
-            case Color::WHITE: return QUEENSIDE_WHITE;
-            case Color::BLACK: return QUEENSIDE_BLACK;
-            default: throw JupiterException(std::string("Getting queenside castling right for invalid colour: ") + Color::Show(color));
-        }
+        return static_cast<Value>(4 + 4 * color);
     }
 };
 

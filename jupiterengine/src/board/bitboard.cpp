@@ -1,7 +1,6 @@
 #include "bitboard.h"
 #include <sstream>
 #include "core.h"
-#include "util/exception.h"
 #include "util/instrumenter.h"
 
 BitboardSet::BitboardSet()
@@ -92,45 +91,4 @@ void BitboardSet::Show() const
             ss << ". ";
     }
     INFO(ss.str());
-}
-
-void BitboardSet::Dump() const 
-{
-    JUPITER_TRACE();
-
-    for (const Color::Value color : { Color::WHITE, Color::BLACK }) {
-        for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
-            INFO(Color::Show(color) << " " << Piece::Show(piece) << ":");
-            ShowBitboard(m_Bits[color][piece]);
-        }
-    }
-
-    INFO("White combined");
-    ShowBitboard(m_Combined[Color::WHITE]);
-
-    INFO("Black combined");
-    ShowBitboard(m_Combined[Color::BLACK]);
-}
-
-void BitboardSet::Validate() const 
-{
-    JUPITER_TRACE();
-
-    if ((m_Combined[Color::WHITE] & m_Combined[Color::BLACK]) == 0)
-        return;
-        
-    for (Piece::Value whitePiece = Piece::PAWN; whitePiece < Piece::MAX_ENUM; whitePiece++) {
-        for (std::size_t i = 0; i < 64; i++) {
-            for (Piece::Value blackPiece = Piece::PAWN; blackPiece < Piece::MAX_ENUM; blackPiece++) {
-                uint64_t bit = 1ull << i;
-                if ((m_Bits[Color::WHITE][whitePiece] & bit) && (m_Bits[Color::BLACK][blackPiece] & bit)) {
-                    Dump();
-                    Show();
-                    std::stringstream ss;
-                    ss << "Bitboards invalid: white " << Piece::Show(whitePiece) << " and black " << Piece::Show(blackPiece) << " both on square " << i;
-                    throw JupiterException(ss.str());
-                }
-            }
-        }
-    }
 }

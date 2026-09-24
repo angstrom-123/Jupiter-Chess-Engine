@@ -291,7 +291,7 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
         ttScore += ply;
     else if (bestScore < -MATE_THRESHOLD)
         ttScore -= ply;
-    m_TranspositionTable.Save(state.zobristKey, ttScore, depthUnits / PLY_UNIT, bestMove, nodeType);
+    m_TranspositionTable.Save(state.zobristKey, state.halfMove, ttScore, depthUnits / PLY_UNIT, bestMove, nodeType);
 
     return bestScore;
 }
@@ -400,7 +400,7 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
     return bestScore;
 }
 
-void Searcher::SetTimeControl(uint64_t seconds, uint64_t increment)
+void Searcher::SetTimeControl(float seconds, float increment)
 {
     JUPITER_TRACE();
 
@@ -440,6 +440,20 @@ void Searcher::MetricsJSON(std::string& result) const
         << "}";
 
     result = ss.str();
+}
+
+void Searcher::TuneEval(const EvaluatorConstants& weights)
+{
+    JUPITER_TRACE();
+
+    m_Eval.Tune(std::forward<const EvaluatorConstants&>(weights));
+}
+
+EvaluatorConstants Searcher::EvalWeights() const
+{
+    JUPITER_TRACE();
+
+    return m_Eval.GetWeights();
 }
 
 bool Searcher::IsCheckmate(const BoardState& state)

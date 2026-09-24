@@ -7,19 +7,45 @@
 #include "board/boardState.h"
 #include "evaluation/distanceTable.h"
 #include <cstdint>
+#include <cstring>
 
 const int32_t MATE_EVAL = 100'000'000;
 const int32_t MATE_THRESHOLD = 99'000'000;
 const int32_t INFINITY_EVAL = 101'000'000;
 
-using PieceCounts = uint8_t[Color::MAX_ENUM][Piece::MAX_ENUM - 1];
+struct PawnKind { typedef enum : uint8_t { REGULAR, WEAK, PASSED, MAX_ENUM } Value; };
 
-struct PositionData {
-    PieceCounts counts{};
-    Bitboard kingBits[Color::MAX_ENUM]{0};
-    uint8_t kingIndices[Color::MAX_ENUM]{0};
-    PawnStructure pawns{};
-    float phase{0};
+struct EvaluatorConstants {
+    float materialWeight{1.0};
+    float pstWeight{1.0};
+    int32_t mopupProximityFactor{4};
+    int32_t mopupEdgeFactor{10};
+    int32_t kingMobilityFactor{-20};
+    int32_t mobilityFactor{5};
+    int32_t kingPawnTropismFactors[PawnKind::MAX_ENUM]{2, 3, 6};
+    int32_t missingShieldPawnFactor{-40};
+    int32_t stormingPawnFactor{-7};
+    int32_t sliderOpenFileFactor{45};
+    int32_t weakPawnFactor{-25};
+    int32_t connectedPawnFactor{15};
+
+    static EvaluatorConstants Tuned()
+    {
+        return EvaluatorConstants {
+            .materialWeight = 1.7982300519943237,
+            .pstWeight = 0.8320792317390442,
+            .mopupProximityFactor = -4,
+            .mopupEdgeFactor = 7,
+            .kingMobilityFactor = -22,
+            .mobilityFactor = 3,
+            .kingPawnTropismFactors = { -3, 8, 5 },
+            .missingShieldPawnFactor = -29,
+            .stormingPawnFactor = -3,
+            .sliderOpenFileFactor = 44,
+            .weakPawnFactor = -23,
+            .connectedPawnFactor = 25
+        };
+    }
 };
 
 class Evaluator {
@@ -32,27 +58,32 @@ public:
     uint64_t GetEvaluationCount() const { return m_Evaluations; }
     uint64_t GetPawnTableHitCount() const { return m_PawnTableHits; }
     uint64_t GetPawnTableSize() const { return m_PawnTable.OccupancyBytes(); }
-    void ComputePawnStructure(const BoardState& state, PositionData& data) const; // TODO: Make private
+    void Tune(const EvaluatorConstants& weights) { m_Constants = weights; }
+    EvaluatorConstants GetWeights() const { return m_Constants; }
 
 private:
-    void CountPieces(const BoardState& state, PositionData& data) const;
-    void FindKings(const BoardState& state, PositionData& data) const;
-    bool IsMaterialDraw(const PositionData& data) const;
-    // void ComputePawnStructure(const BoardState& state, PositionData& data) const;
-
-    int32_t KingPawnTropism(const BoardState& state, const PositionData& data) const;
-    int32_t PawnShield(const BoardState& state, const PositionData& data) const;
-    int32_t PawnStorm(const BoardState& state, const PositionData& data) const;
-    int32_t OpenFiles(const BoardState& state, const PositionData& data) const;
-    int32_t IndependentPawnStructure(const BoardState& state, const PositionData& data) const;
-    int32_t MaterialBalance(const BoardState& state, const PositionData& data) const;
-    int32_t PiecePositions(const BoardState& state, const PositionData& data) const;
-    int32_t Mopup(const BoardState& state, const PositionData& data) const;
-    int32_t KingMobility(const BoardState& state, const PositionData& data) const;
-    int32_t Mobility(const BoardState& state, const PositionData& data) const;
+    void CountPieces(const BoardState& state, struct PositionData& data) const;
+    void FindKings(const BoardState& state, struct PositionData& data) const;
+    bool IsMaterialDraw(const struct PositionData& data) const;
+    void ComputePawnStructure(const BoardState& state, struct PositionData& data) const;
     uint8_t PawnChainLength(const BoardState& state, Direction::Value direction, uint8_t index) const;
 
+    int32_t KingPawnTropism(const BoardState& state, const struct PositionData& data) const;
+    int32_t PawnShield(const BoardState& state, const struct PositionData& data) const;
+    int32_t PawnStorm(const BoardState& state, const struct PositionData& data) const;
+    int32_t OpenFiles(const BoardState& state, const struct PositionData& data) const;
+    int32_t IndependentPawnStructure(const BoardState& state, const struct PositionData& data) const;
+    int32_t MaterialBalance(const BoardState& state, const struct PositionData& data) const;
+    int32_t PiecePositions(const BoardState& state, const struct PositionData& data) const;
+    int32_t Mopup(const BoardState& state, const struct PositionData& data) const;
+    int32_t KingMobility(const BoardState& state, const struct PositionData& data) const;
+    int32_t Mobility(const BoardState& state, const struct PositionData& data) const;
+
 private:
+    // TODO: More tuning?
+    // EvaluatorConstants m_Constants{};
+    EvaluatorConstants m_Constants{EvaluatorConstants::Tuned()};
+
     uint64_t m_PawnTableHits{0};
     uint64_t m_Evaluations{0};
 

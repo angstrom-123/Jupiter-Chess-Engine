@@ -143,6 +143,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
     turn = enemy;
     zobristKey ^= zobrist.ValueForTurn(friendly);
     zobristKey ^= zobrist.ValueForTurn(enemy);
+    halfMove++;
 
     return moveData;
 }
@@ -191,6 +192,7 @@ void BoardState::UnmakeMove(MoveData moveData)
     zobristKey = moveData.zobristKey;
     pawnKey = moveData.pawnKey;
     pstScore = moveData.pstScore;
+    halfMove--;
 }
 
 bool BoardState::WasLegalMove(const AttackTable& attackTable, MoveData moveData)

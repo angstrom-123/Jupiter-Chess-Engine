@@ -15,6 +15,7 @@ public:
     Color::Value turn{Color::WHITE};
     uint8_t enPassantIndex{UINT8_MAX};
     uint8_t fiftyMoveCounter{0};
+    uint16_t halfMove{0};
 
     MoveData MakeMove(const Zobrist& zobrist, const PieceSquareTables& pst, Move move);
     void UnmakeMove(MoveData moveData);

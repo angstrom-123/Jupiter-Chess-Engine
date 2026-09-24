@@ -1,5 +1,6 @@
 #include "fenParser.h"
 #include "util/instrumenter.h"
+#include "util/exception.h"
 #include <charconv>
 #include <cstring>
 

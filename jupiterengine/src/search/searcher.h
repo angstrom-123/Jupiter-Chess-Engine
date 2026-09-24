@@ -22,9 +22,11 @@ class Searcher {
 public:
     Searcher(Zobrist& zobrist, PieceSquareTables& pieceSquareTables);
     Move FindBest(BoardState& state, History& history, uint64_t msRemaining);
-    void SetTimeControl(uint64_t seconds, uint64_t increment);
+    void SetTimeControl(float seconds, float increment);
     void TelemetryJSON(std::string& result) const;
     void MetricsJSON(std::string& result) const;
+    void TuneEval(const EvaluatorConstants& weights);
+    EvaluatorConstants EvalWeights() const;
 
 private:
     void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv);
@@ -47,8 +49,8 @@ private:
     uint64_t m_LastPawnsLookedUp{0};
     uint64_t m_LastEvaluations{0};
 
-    uint64_t m_TimeControlSeconds{0};
-    uint64_t m_TimeControlIncrement{0};
+    float m_TimeControlSeconds{0.0};
+    float m_TimeControlIncrement{0.0};
     bool m_SearchAborted{false};
     bool m_InOpeningBook{true};
     uint64_t m_SoftSearchBound{0};

@@ -22,6 +22,10 @@ PTEntry PawnTable::Get(ZobristKey pawnKey) const
 
 void PawnTable::Save(ZobristKey pawnKey, int32_t score, PawnStructure& structure)
 {
+    // Do not save positions with 0 pawns
+    if (pawnKey == 0)
+        return;
+
     std::size_t index = Index(pawnKey);
     const PTEntry& oldEntry = m_Table[index];
     if (!oldEntry.IsValid())

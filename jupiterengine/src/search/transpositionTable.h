@@ -32,21 +32,21 @@ struct TTEntryPacked {
     uint32_t payload{0};
 
     TTEntryPacked() = default;
-    TTEntryPacked(ZobristKey hash, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
+    TTEntryPacked(ZobristKey hash, uint8_t halfMove, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
         : hash{hash}, score{score}
     {
         // 32 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 9  8  7  6  5  4  3  2  1 
         // ------- depth---------- ----age---- --promo- --piece- -----from-------  -------to-------  type
 
-        payload |= static_cast<uint32_t>(depth) << 24;
-        payload |= static_cast<uint32_t>(0b1111) << 20; // TODO: Age
+        payload |= static_cast<uint32_t>(depth & 0b11111111) << 24;
+        payload |= static_cast<uint32_t>(halfMove & 0b1111) << 20;
         payload |= static_cast<uint32_t>(bestMove.promote) << 17;
         payload |= static_cast<uint32_t>(bestMove.piece) << 14;
         payload |= static_cast<uint32_t>(bestMove.from) << 8;
         payload |= static_cast<uint32_t>(bestMove.to) << 2;
         payload |= static_cast<uint32_t>(nodeType);
     }
-    bool IsValid() const { return hash > 0; }
+    bool IsValid() const { return payload > 0; }
     static TTEntryPacked Invalid() { return TTEntryPacked(); }
 };
 
@@ -54,6 +54,7 @@ struct TTEntry {
     ZobristKey hash{0};
     int32_t score{0};
     uint8_t depth{0};
+    uint8_t age{0};
     Move bestMove{Move::Invalid()};
     NodeType::Value nodeType{NodeType::EXACT};
 
@@ -65,8 +66,7 @@ struct TTEntry {
         // ------- depth---------- ----age---- --promo- --piece- -----from-------  -------to-------  type
 
         depth = packed.payload >> 24;
-
-        uint8_t age = (packed.payload >> 20) & 0b1111; // TODO: Age
+        age = (packed.payload >> 20) & 0b1111;
 
         Piece::Value promote = static_cast<Piece::Value>((packed.payload >> 17) & 0b111);
         Piece::Value piece = static_cast<Piece::Value>((packed.payload >> 14) & 0b111);
@@ -87,7 +87,7 @@ public:
 
     std::size_t OccupancyBytes() const { return m_Occupancy * sizeof(TTEntryPacked); }
     TTEntry Get(ZobristKey key);
-    void Save(ZobristKey key, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType);
+    void Save(ZobristKey key, uint8_t halfMove, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType);
 
 private:
 

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "core.h"
+#include "util/log.h"
 #include <utility>
+#include <sstream>
 
 using Bitboard = uint64_t;
 
@@ -61,8 +63,6 @@ public:
     Piece::Value PieceInSquare(Color::Value color, uint8_t index) const;
     void Clear();
     void Show() const;
-    void Dump() const;
-    void Validate() const;
 
 private:
     uint64_t m_Bits[Color::MAX_ENUM][Piece::MAX_ENUM]{{0}};

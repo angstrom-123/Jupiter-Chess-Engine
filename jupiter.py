@@ -3,14 +3,17 @@
 import json
 from typing import override
 
+# Absolute import here is ok since this is in the same dir as the server cwd
 from framework.base_engine import BaseEngine, TimeControl
 
+# Use relative imports here because this file will be loaded from a different directory
 from .jupiterengine.build.libjupiter import Board
+from . import helpers
 
 class Jupiter(BaseEngine):
     board: Board | None = None 
     n_searches: int = 0
-    telemetry: dict = {}
+    telemetry: dict[str, int] = {}
 
     @override
     def init(self, tc: TimeControl, fen: str | None = None) -> None:
@@ -19,63 +22,46 @@ class Jupiter(BaseEngine):
         self.n_searches = 0 
         self.telemetry = {}
 
+    @helpers.not_none("board")
     @override
     def go(self, ms_left: int) -> str | None:
-        if self.board is None:
-            raise AttributeError("[JUPITER] self.board is not initialised. Try calling init.")
-
         move: str | None = self.board.go(ms_left)
-        self._save_metrics()
+        self.n_searches += 1
+        telem: dict[str, int] = json.loads(self.board.get_telemetry())
+        self.telemetry = telem if len(self.telemetry.keys()) == 0 else { k: self.telemetry[k] + v for k, v in telem.items()}
         return move
 
+    @helpers.not_none("board")
     @override
     def move(self, move: str) -> None:
-        if self.board is None:
-            raise AttributeError("[JUPITER] self.board is not initialised. Try calling init.")
-
         self.board.make_move(move)
 
+    @helpers.not_none("board")
+    @override 
+    def tuning_get_params(self) -> dict[str, float]:
+        weights: dict[str, float | int] = self.board.get_weights()
+        return helpers.normalise_weights(weights)
+
+    @helpers.not_none("board")
+    @override 
+    def tuning_set_params(self, params: dict[str, float]) -> None:
+        weights: dict[str, float] = helpers.denormalise_weights(params)
+        print("Set:")
+        print(weights)
+        helpers.assign_weights(self.board, weights)
+
+    @helpers.not_none("board")
     @override 
     def game_over(self) -> None:
-        if self.board is None:
-            raise AttributeError("[JUPITER] self.board is not initialised. Try calling init.")
+        metrics: dict[str, int] = json.loads(self.board.get_metrics())
+        helpers.print_telemetry_and_metrics(self.telemetry, metrics, self.n_searches)
 
-        metrics: dict = json.loads(self.board.get_metrics())
-
-        if self.telemetry["searchTime"] == 0:
-            print("[JUPITER] No metrics to show - never left opening book")
-            return
-
-        print(f"""
-[JUPITER] Game metrics:
-    - avg Nodes Searched  : {(self.telemetry["nodesSearched"] / self.n_searches) / 1_000_000:.3f}M
-    - avg Nodes Quiesced  : {(self.telemetry["nodesQuiesced"] / self.n_searches) / 1_000_000:.3f}M
-    - avg Search Speed    : {self.telemetry["nodesSearched"] / (self.telemetry["searchTime"] * 1000):.3f}mnps 
-    - avg Quiescence %    : {(self.telemetry["nodesQuiesced"] / self.telemetry["nodesSearched"]) * 100:.3f}%
-    - avg Completed Depth : {self.telemetry["depth"] / self.n_searches:.3f}
-    - avg Lookup %        : {(self.telemetry["nodesLookedUp"] / self.telemetry["nodesSearched"]) * 100:.3f}%
-    - avg Pawn Lookup %   : {(self.telemetry["pawnsLookedUp"] / self.telemetry["evaluations"]) * 100:.3f}%
-    - TT Occupancy        : {metrics["ttSize"] / (1024 * 1024):.3f}MiB
-    - PT Occupancy        : {metrics["ptSize"] / (1024 * 1024):.3f}MiB
-    - Book Moves          : {metrics["bookMoves"]}
-    - Searches Completed  : {self.n_searches}
-""")
-
+    @helpers.not_none("board")
     @override 
     def show(self) -> str:
         return repr(self.board)
 
+    @helpers.not_none("board")
     @override 
     def __repr__(self) -> str:
         return repr(self.board)
-
-    def _save_metrics(self):
-        if self.board is None:
-            raise AttributeError("[JUPITER] self.board is not initialised. Try calling init.")
-
-        self.n_searches += 1
-        telem: dict = json.loads(self.board.get_telemetry())
-        if len(self.telemetry.keys()) == 0:
-            self.telemetry = telem
-        else:
-            self.telemetry = { k: self.telemetry[k] + telem[k] for k in self.telemetry.keys()}
