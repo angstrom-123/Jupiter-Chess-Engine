@@ -1,4 +1,11 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.18)
+
+set(CMAKE_CXX_COMPILER "clang++" CACHE STRING "C++ compiler" FORCE)
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    message(FATAL_ERROR "Apple Clang is not supported! Please use LLVM Clang (you can install via brew)")
+endif()
+
 project(jupiter VERSION 0.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -8,11 +15,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Don't use set because apparently apple doesn't like it
 string(APPEND CMAKE_CXX_FLAGS " -Wall -Wextra")
-string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O3 -g -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer")
+string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O3 -g -DDEBUG -fno-omit-frame-pointer")
 string(APPEND CMAKE_CXX_FLAGS_RELEASE " -O3 -DNOTRACE")
 string(APPEND CMAKE_CXX_FLAGS_PROFILE " -O3 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls -DNOTRACE")
 
-find_package(Python3 COMPONENTS Development REQUIRED)
+# find_package(Python3 COMPONENTS Development REQUIRED)
+find_package(Python3 COMPONENTS Development.Module REQUIRED)
 
 set(SOURCES
     src/pythonModule.cpp
@@ -46,11 +54,16 @@ target_include_directories(jupiter
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
-        ${Python3_INCLUDE_DIRS}
+        # ${Python3_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(jupiter PRIVATE ${Python3_LIBRARIES})
+# target_link_libraries(jupiter PRIVATE ${Python3_LIBRARIES})
+target_link_libraries(jupiter PRIVATE Python3::Module)
+
+if(APPLE)
+    target_link_options(jupiter PRIVATE -undefined dynamic_lookup)
+endif()
 
 # Try to force compilers to emit efficient intrinsics
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
