@@ -46,8 +46,6 @@ class Jupiter(BaseEngine):
     @override 
     def tuning_set_params(self, params: dict[str, float]) -> None:
         weights: dict[str, float] = helpers.denormalise_weights(params)
-        print("Set:")
-        print(weights)
         helpers.assign_weights(self.board, weights)
 
     @helpers.not_none("board")

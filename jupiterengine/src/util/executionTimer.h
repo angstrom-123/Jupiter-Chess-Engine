@@ -13,5 +13,5 @@ public:
     uint64_t SinceStart() const;
 
 private:
-    chrono::time_point<chrono::system_clock, chrono::duration<long, std::ratio<1, 1000000000>>> m_StartPoint;
+    chrono::time_point<chrono::steady_clock, chrono::duration<long, std::ratio<1, 1000000000>>> m_StartPoint;
 };

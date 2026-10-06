@@ -10,9 +10,9 @@ Written to integrate directly with [Jupiter Client](https://github.com/angstrom-
 ## Prerequisites
 
 - Python (>=3.12)
-- C++ Compiler (>=c++23)
+- C++ Compiler (I am testing with `clang++-23`, c++23 support required)
 - CMake 
-- make (or windows equivalent for use with CMake)
+- CMake-compatible build system (I am testing with `make`)
 
 ## Build and Run
 

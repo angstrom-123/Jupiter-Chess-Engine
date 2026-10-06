@@ -264,13 +264,14 @@ namespace py {
 
     #define PYCFN(fn) reinterpret_cast<PyCFunction>(fn)
     static PyMethodDef boardMethods[] = {
-        { "go",               PYCFN(BoardGo),             METH_VARARGS,                 "Find the best move on the current board within the given time." },
-        { "make_move",        PYCFN(BoardMakeMove),       METH_VARARGS,                 "Apply a move in Long Algebraic Notation to update game state." },
-        { "set_time_control", PYCFN(BoardSetTimeControl), METH_VARARGS,                 "Set the time control for the engine to use." },
-        { "get_telemetry",    PYCFN(BoardGetTelemetry),   METH_NOARGS,                  "Get internal engine telemetry as stringified JSON." },
-        { "get_metrics",      PYCFN(BoardGetMetrics),     METH_NOARGS,                  "Get internal engine metrics as stringified JSON." },
-        { "set_weights",      PYCFN(BoardSetWeights),     METH_VARARGS | METH_KEYWORDS, "Adjust evaluation weights and factors from provided defaults." },
-        { "get_weights",      PYCFN(BoardGetWeights),     METH_NOARGS,                  "Get current evaluation weights as a dict." },
+        { "go", PYCFN(BoardGo), METH_VARARGS, "Find the best move on the current board within the given time." },
+        { "make_move", PYCFN(BoardMakeMove), METH_VARARGS, "Apply a move in Long Algebraic Notation to update game state." },
+        { "set_time_control", PYCFN(BoardSetTimeControl), METH_VARARGS, "Set the time control for the engine to use." },
+        { "get_telemetry", PYCFN(BoardGetTelemetry), METH_NOARGS, "Get internal engine telemetry as stringified JSON." },
+        { "get_metrics", PYCFN(BoardGetMetrics), METH_NOARGS, "Get internal engine metrics as stringified JSON." },
+        // This method has a different signature not encoded in this type cast, the flags account for it
+        { "set_weights", PYCFN(BoardSetWeights), METH_VARARGS | METH_KEYWORDS, "Adjust evaluation weights and factors from provided defaults." },
+        { "get_weights", PYCFN(BoardGetWeights), METH_NOARGS, "Get current evaluation weights as a dict." },
         { nullptr, nullptr, 0, nullptr }
     };
 
