@@ -83,6 +83,8 @@ Move MoveStream::Stream(bool quiescenceMode)
         case StreamState::FINISHED:
             return Move::Invalid();
     };
+
+    std::unreachable();
 }
 
 static const uint8_t MVV_LVA_TABLE[Piece::MAX_ENUM + 1][Piece::MAX_ENUM + 1] = {

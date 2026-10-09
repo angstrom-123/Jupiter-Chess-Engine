@@ -1,12 +1,11 @@
 cmake_minimum_required(VERSION 3.18)
 
-set(CMAKE_CXX_COMPILER "clang++" CACHE STRING "C++ compiler" FORCE)
-
-if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    message(FATAL_ERROR "Apple Clang is not supported! Please use LLVM Clang (you can install via brew)")
-endif()
-
 project(jupiter VERSION 0.0.1 LANGUAGES CXX)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
+    message(FATAL_ERROR "Compilation using apple clang++ is not supported. Please use LLVM clang++ instead.
+    Once installed, add '-DCMAKE_CXX_COMPILER=/path/to/llvm/clang++' (replacing the path with your llvm clang++ path) to your cmake command.")
+endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -66,10 +65,19 @@ if(APPLE)
 endif()
 
 # Try to force compilers to emit efficient intrinsics
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
-    if(APPLE)
-        target_compile_options(jupiter PRIVATE -msse4.2 -mpopcnt -mbmi)
-    else()
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
+    message(STATUS "x86 detected")
+    if(MSVC) # Windows MSVC
+        target_compile_options(jupiter PRIVATE /arch:AVX2)
+    else() # GCC or Clang (Apple Clang not supported)
+        if(APPLE)
+            target_compile_options(jupiter PRIVATE -msse4.2 -mpopcnt -mbmi -mbmi2 -mlzcnt)
+        else()
+            target_compile_options(jupiter PRIVATE -march=native -mbmi -mbmi2 -mlzcnt -mpopcnt)
+        endif()
+    endif()
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+    if(NOT MSCV)
         target_compile_options(jupiter PRIVATE -march=native)
     endif()
 endif()

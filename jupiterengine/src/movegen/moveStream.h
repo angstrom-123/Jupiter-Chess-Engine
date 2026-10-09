@@ -1,5 +1,10 @@
 #pragma once
 
+#ifndef __clang__ 
+    #define _Nullable 
+    #define _Nonnull
+#endif
+
 #include "movegen/move.h"
 #include "movegen/movegen.h"
 #include "board/boardState.h"

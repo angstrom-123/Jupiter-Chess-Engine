@@ -30,7 +30,7 @@ template<Piece::Value piece> struct SliderData {
     Buffer<Bitboard, 64> magics{Buffer<Bitboard, 64>(64)};
     Buffer<uint8_t, 64> shifts{Buffer<uint8_t, 64>(64)};
     Buffer<Bitboard *, 64> tables{Buffer<Bitboard *, 64>(64)};
-    Bitboard (*tableMemory){nullptr};
+    Bitboard *tableMemory{nullptr};
 };
 
 class AttackTable {
