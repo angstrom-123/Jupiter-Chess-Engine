@@ -20,7 +20,6 @@ Written to integrate directly with [Jupiter Client](https://github.com/angstrom-
 - Python (>=3.12)
 - C++ Compiler (>=c++23)
 - CMake 
-- CMake-compatible build system (I am testing with `make`)
 
 ## Build and Run
 
