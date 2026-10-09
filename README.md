@@ -11,7 +11,7 @@ Written to integrate directly with [Jupiter Client](https://github.com/angstrom-
 
 | Platform | MSVC | LLVM Clang (clang++) | GCC (g++) | Apple Clang (clang++) |
 | --- | --- | --- | --- | --- |
-| Windows | WIP | Untested | Not Native | - |
+| Windows | WIP | Untested | - | - |
 | Linux | - | Working | Working | - |
 | MacOS | - | Working | Untested | Not Supported |
 
