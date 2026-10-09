@@ -2,7 +2,7 @@
 
 PawnTable::PawnTable()
 {
-    m_Table = new PTEntry[PAWN_TABLE_SIZE];
+    m_Table = new PTEntry[PAWN_TABLE_SIZE]{};
 }
 
 PawnTable::~PawnTable()

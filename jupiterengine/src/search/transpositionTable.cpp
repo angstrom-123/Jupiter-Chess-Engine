@@ -7,8 +7,7 @@ TranspositionTable::TranspositionTable()
 {
     JUPITER_TRACE();
 
-    m_Table = new TTEntryPacked[TRANSPOSITION_TABLE_SIZE];
-    std::memset(m_Table, 0, TRANSPOSITION_TABLE_SIZE * sizeof(TTEntryPacked));
+    m_Table = new TTEntryPacked[TRANSPOSITION_TABLE_SIZE]{};
 }
 
 TranspositionTable::~TranspositionTable()
