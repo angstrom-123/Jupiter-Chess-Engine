@@ -3,22 +3,15 @@
 
 ExecutionTimer::ExecutionTimer()
 {
-    // m_StartPoint = chrono::high_resolution_clock::now();
-    m_StartPoint = chrono::steady_clock::now();
+    m_StartPoint = Now();
 }
 
-uint64_t ExecutionTimer::Now() const
+TimePoint ExecutionTimer::Now() const
 {
-    // return chrono::time_point_cast<chrono::milliseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
-    return chrono::time_point_cast<chrono::milliseconds>(std::chrono::steady_clock::now()).time_since_epoch().count();
+    return std::chrono::steady_clock::now();
 }
 
-uint64_t ExecutionTimer::StartTime() const
+TimePoint ExecutionTimer::StartTime() const
 {
-    return chrono::time_point_cast<chrono::milliseconds>(m_StartPoint).time_since_epoch().count();
-}
-
-uint64_t ExecutionTimer::SinceStart() const
-{
-    return Now() - StartTime();
+    return m_StartPoint;
 }

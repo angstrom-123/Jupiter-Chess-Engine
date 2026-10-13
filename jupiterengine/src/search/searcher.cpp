@@ -23,7 +23,7 @@ Searcher::Searcher(Zobrist& zobrist, PieceSquareTables& pieceSquareTables)
     m_FastRNG.Warm();
 }
 
-Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemaining)
+Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingMs)
 {
     JUPITER_TRACE();
 
@@ -38,7 +38,7 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
         m_Killers[i].Resize(0);
 
     m_Timer = ExecutionTimer();
-    uint64_t startMs = m_Timer.Now();
+    TimePoint startPoint = m_Timer.Now();
 
     // If still in opening look up a book move
     Move openingMove = PickOpeningMove(state);
@@ -46,14 +46,17 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
         return openingMove;
 
     // Decide how long to search for
-    CalculateSearchTime(msRemaining);
+    CalculateSearchTime(remainingMs);
 
     Move finalMove = Move::Invalid();
     uint16_t depth = 0;
     while (++depth) {
         // Check if over time every 4096 nodes
-        if (((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) || depth >= MAX_PLY)
+        if (((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) || depth >= MAX_PLY) {
+            INFO("Now: " << m_Timer.Now().time_since_epoch().count());
+            INFO("Bound: " << m_SoftSearchBound.time_since_epoch().count());
             break;
+        }
 
         m_LastNodesSearched++;
 
@@ -151,7 +154,7 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t msRemainin
     }
 
     m_LastSearchDepth = (m_SearchAborted) ? depth - 1 : depth;
-    m_LastSearchTime = m_SoftSearchBound - startMs;
+    m_LastSearchTime = chrono::duration_cast<chrono::milliseconds>(m_SoftSearchBound - startPoint).count();
     m_LastPawnsLookedUp = m_Eval.GetPawnTableHitCount() - m_LastPawnsLookedUp;
     m_LastEvaluations = m_Eval.GetEvaluationCount() - m_LastEvaluations;
 
@@ -168,6 +171,8 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
     // Check if over time every 4096 nodes
     if ((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) {
         m_SearchAborted = true;
+        INFO("Now: " << m_Timer.Now().time_since_epoch().count());
+        INFO("Bound: " << m_SoftSearchBound.time_since_epoch().count());
         return 0;
     }
 
@@ -303,6 +308,8 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
     // Only check termination condition every 4096 nodes to save expensive clock calls
     if ((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) {
         m_SearchAborted = true;
+        INFO("Now: " << m_Timer.Now().time_since_epoch().count());
+        INFO("Bound: " << m_SoftSearchBound.time_since_epoch().count());
         return 0;
     }
 
@@ -498,15 +505,18 @@ void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t
 }
 
 // TODO: Search extensions (time)
-void Searcher::CalculateSearchTime(uint64_t msRemaining)
+void Searcher::CalculateSearchTime(uint64_t remainingMs)
 {
     JUPITER_TRACE();
 
     float incrementMs = m_TimeControlIncrement * 1000.0;
-    uint64_t targetMs = msRemaining / 20.0 + incrementMs / 2.0;
+    uint64_t targetMs = remainingMs / 20.0 + incrementMs / 2.0;
 
-    m_SoftSearchBound = m_Timer.StartTime() + targetMs;
-    m_HardSearchBound = m_Timer.StartTime() + targetMs * 2;
+    m_SoftSearchBound = m_Timer.StartTime() + chrono::milliseconds(targetMs);
+    m_HardSearchBound = m_Timer.StartTime() + chrono::milliseconds(targetMs * 2);
+
+    INFO("start: " << m_Timer.StartTime().time_since_epoch().count());
+    INFO("soft: " << m_SoftSearchBound.time_since_epoch().count());
 }
 
 Move Searcher::PickOpeningMove(const BoardState& state)

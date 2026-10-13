@@ -15,13 +15,15 @@
 
 using LineBuffer = Buffer<Move, MAX_PLY>;
 
+namespace chrono = std::chrono;
+
 constexpr uint16_t PLY_UNIT = 64;
 constexpr uint16_t HALF_PLY_UNIT = PLY_UNIT / 2;
 
 class Searcher {
 public:
     Searcher(Zobrist& zobrist, PieceSquareTables& pieceSquareTables);
-    Move FindBest(BoardState& state, History& history, uint64_t msRemaining);
+    Move FindBest(BoardState& state, History& history, uint64_t remainingMs);
     void SetTimeControl(float seconds, float increment);
     void TelemetryJSON(std::string& result) const;
     void MetricsJSON(std::string& result) const;
@@ -31,7 +33,7 @@ public:
 private:
     void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv);
     bool IsCheckmate(const BoardState& state);
-    void CalculateSearchTime(uint64_t msRemaining);
+    void CalculateSearchTime(uint64_t remainingMs);
     Move PickOpeningMove(const BoardState& state);
     int32_t Search(BoardState& state, History& history, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t ply);
     int32_t Quiesce(BoardState& state, History& history, int32_t alpha, int32_t beta, uint8_t ply);
@@ -53,8 +55,8 @@ private:
     float m_TimeControlIncrement{0.0};
     bool m_SearchAborted{false};
     bool m_InOpeningBook{true};
-    uint64_t m_SoftSearchBound{0};
-    uint64_t m_HardSearchBound{0}; // TODO: Better search extensions / reductions
+    TimePoint m_SoftSearchBound;
+    TimePoint m_HardSearchBound; // TODO: Better search extensions / reductions
 
     ExecutionTimer m_Timer;
     Buffer<KillerMoveBuffer, MAX_PLY> m_Killers;

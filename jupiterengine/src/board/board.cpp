@@ -65,7 +65,7 @@ namespace libjupiter {
     {
         JUPITER_TRACE();
 
-        return m_Searcher->FindBest(m_State, m_History, moveMs);
+	return m_Searcher->FindBest(m_State, m_History, moveMs);
     }
 
     void Board::MakeMove(LongAlgebraicMove lan)

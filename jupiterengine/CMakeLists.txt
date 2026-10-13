@@ -13,12 +13,21 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Don't use set because apparently apple doesn't like it
-string(APPEND CMAKE_CXX_FLAGS " -Wall -Wextra")
-string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O3 -g -DDEBUG -fno-omit-frame-pointer")
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " -O3 -DNOTRACE")
-string(APPEND CMAKE_CXX_FLAGS_PROFILE " -O3 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls -DNOTRACE")
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_DEBUG "" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS_RELEASE "" CACHE STRING "" FORCE)
 
-# find_package(Python3 COMPONENTS Development REQUIRED)
+    string(APPEND CMAKE_CXX_FLAGS " /W4")
+    string(APPEND CMAKE_CXX_FLAGS_DEBUG " /Ox /Zi /DDEBUG /Oy- /MDd")
+    string(APPEND CMAKE_CXX_FLAGS_RELEASE " /Ox /DNOTRACE /MD")
+    string(APPEND CMAKE_CXX_FLAGS_PROFILE " /Ox /Zi /Oy- /DNOTRACE") # No way to disable sibling call optimisation with optimisations on with MSVC
+else()
+    string(APPEND CMAKE_CXX_FLAGS " -Wall -Wextra")
+    string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O3 -g -DDEBUG -fno-omit-frame-pointer")
+    string(APPEND CMAKE_CXX_FLAGS_RELEASE " -O3 -DNOTRACE")
+    string(APPEND CMAKE_CXX_FLAGS_PROFILE " -O3 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls -DNOTRACE")
+endif()
+
 find_package(Python3 COMPONENTS Development.Module REQUIRED)
 
 set(SOURCES
@@ -53,11 +62,10 @@ target_include_directories(jupiter
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
-        # ${Python3_INCLUDE_DIRS}
+        ${Python3_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# target_link_libraries(jupiter PRIVATE ${Python3_LIBRARIES})
 target_link_libraries(jupiter PRIVATE Python3::Module)
 
 if(APPLE)
@@ -77,14 +85,14 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
         endif()
     endif()
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-    if(NOT MSCV)
+    if(NOT MSVC)
         target_compile_options(jupiter PRIVATE -march=native)
     endif()
 endif()
 
 # Windows doesn't do this for us
 if(WIN32)
-    set_target_properties(jupiter PROPERTIES SUFFIX ".pyd")
+    set_target_properties(jupiter PROPERTIES PREFIX "" SUFFIX ".pyd")
 endif()
 
 set(PACKAGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/libjupiter")
@@ -93,7 +101,20 @@ file(MAKE_DIRECTORY ${PACKAGE_DIR})
 set_target_properties(jupiter PROPERTIES 
     LIBRARY_OUTPUT_DIRECTORY ${PACKAGE_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${PACKAGE_DIR}
+    ARCHIVE_OUTPUT_DIRECTORY ${PACKAGE_DIR}
 )
+
+if(MSVC)
+    set_target_properties(jupiter PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY_DEBUG ${PACKAGE_DIR}
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PACKAGE_DIR}
+        ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${PACKAGE_DIR}
+        LIBRARY_OUTPUT_DIRECTORY_RELEASE ${PACKAGE_DIR}
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PACKAGE_DIR}
+        ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${PACKAGE_DIR}
+        PREFIX "lib"
+    )
+endif()
 
 if(NOT EXISTS "${PACKAGE_DIR}/__init__.py")
     file(WRITE "${PACKAGE_DIR}/__init__.py" "from .libjupiter import *")

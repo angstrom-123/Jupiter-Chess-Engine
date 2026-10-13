@@ -27,9 +27,12 @@ namespace fen {
                 case 'r': case 'R':
                 case 'q': case 'Q':
                 case 'k': case 'K':
-                case 'w': case '-':
-                case 'a'...'h':
-                case '0'...'9':
+                case 'w': 
+                case '-':
+                case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g': case 'h':
+                case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+                //case 'a'...'h':
+                //case '0'...'9':
                     break;
                 default:
                     ERROR("Invalid character: " << c);
@@ -82,7 +85,8 @@ namespace fen {
                     char c = fen[j];
                     Color::Value color = (c > 'Z') ? Color::BLACK : Color::WHITE;
                     switch (c) {
-                        case '1'...'8':
+                        //case '1'...'8':
+                        case '1': case '2': case '3': case '4': case'5': case '6': case '7': case '8':
                             boardIndex += c - '0' - 1; // -1 because board index increments later too
                             break;
                         case 'p': case 'P':
