@@ -73,8 +73,10 @@ cd build
 1. Determine the location of your LLVM clang++ installation
    - If installed via homebrew, it should be `/opt/homebrew/llvm/bin/clang++`
    - If installed another way, you should find the directory yourself
-2. Run `cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=path/to/llvm/clang++`
-   - Replace the example path with the path you found to the compiler
+2. Run the following replacing the example path with the path to your LLVM clang++ installation
+```bash
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=path/to/llvm/clang++
+```
 
 #### 4. Build The Library
 
