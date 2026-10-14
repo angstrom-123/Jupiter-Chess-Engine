@@ -52,11 +52,8 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
     uint16_t depth = 0;
     while (++depth) {
         // Check if over time every 4096 nodes
-        if (((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) || depth >= MAX_PLY) {
-            INFO("Now: " << m_Timer.Now().time_since_epoch().count());
-            INFO("Bound: " << m_SoftSearchBound.time_since_epoch().count());
+        if (((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) || depth >= MAX_PLY)
             break;
-        }
 
         m_LastNodesSearched++;
 
@@ -171,8 +168,6 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
     // Check if over time every 4096 nodes
     if ((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) {
         m_SearchAborted = true;
-        INFO("Now: " << m_Timer.Now().time_since_epoch().count());
-        INFO("Bound: " << m_SoftSearchBound.time_since_epoch().count());
         return 0;
     }
 
@@ -308,8 +303,6 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
     // Only check termination condition every 4096 nodes to save expensive clock calls
     if ((m_LastNodesSearched & 4095) == 0 && m_Timer.Now() >= m_SoftSearchBound) {
         m_SearchAborted = true;
-        INFO("Now: " << m_Timer.Now().time_since_epoch().count());
-        INFO("Bound: " << m_SoftSearchBound.time_since_epoch().count());
         return 0;
     }
 
@@ -514,9 +507,6 @@ void Searcher::CalculateSearchTime(uint64_t remainingMs)
 
     m_SoftSearchBound = m_Timer.StartTime() + chrono::milliseconds(targetMs);
     m_HardSearchBound = m_Timer.StartTime() + chrono::milliseconds(targetMs * 2);
-
-    INFO("start: " << m_Timer.StartTime().time_since_epoch().count());
-    INFO("soft: " << m_SoftSearchBound.time_since_epoch().count());
 }
 
 Move Searcher::PickOpeningMove(const BoardState& state)
