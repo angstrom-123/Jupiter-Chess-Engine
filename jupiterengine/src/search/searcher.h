@@ -15,8 +15,6 @@
 
 using LineBuffer = Buffer<Move, MAX_PLY>;
 
-namespace chrono = std::chrono;
-
 constexpr uint16_t PLY_UNIT = 64;
 constexpr uint16_t HALF_PLY_UNIT = PLY_UNIT / 2;
 
@@ -32,11 +30,15 @@ public:
 
 private:
     void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv);
-    bool IsCheckmate(const BoardState& state);
+    bool KingUnderAttack(const BoardState& state, Color::Value turn);
     void CalculateSearchTime(uint64_t remainingMs);
+    int16_t CalculateExtension(const BoardState& state, const MoveStream& movegen);
     Move PickOpeningMove(const BoardState& state);
     int32_t Search(BoardState& state, History& history, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t ply);
     int32_t Quiesce(BoardState& state, History& history, int32_t alpha, int32_t beta, uint8_t ply);
+    int32_t PrincipalVariationSearch(BoardState& state, History& history, const MoveStream& movegen, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t nextPly);
+    int32_t PrincipalVariationQuiesce(BoardState& state, History& history, const MoveStream& movegen, int32_t alpha, int32_t beta, uint8_t nextPly);
+    void Reset();
 
 private:
     // Metrics

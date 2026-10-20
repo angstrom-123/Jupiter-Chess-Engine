@@ -17,18 +17,22 @@ Move MoveStream::Stream(bool quiescenceMode)
             m_StreamState = StreamState::GOOD_ATTACKS;
 
             // Only return the best move if pseudolegal
-            if (m_BestMove.IsValid() && m_State.pieces.PieceInSquare(m_State.turn, m_BestMove.from) == m_BestMove.piece)
+            if (m_BestMove.IsValid() && m_State.pieces.PieceInSquare(m_State.turn, m_BestMove.from) == m_BestMove.piece) {
+                m_MoveCounter++;
                 return m_BestMove;
+            }
 
             // Fall through
         case StreamState::GOOD_ATTACKS:
             while (m_AttacksIndex < m_Attacks.Size()) {
                 const Move& move = m_Attacks[m_AttacksIndex++];
                 if (move != m_BestMove) {
-                    if (m_Eval->SEE(std::forward<const BoardState>(m_State), std::forward<const Move>(move)) > 0)
+                    if (m_Eval->SEE(std::forward<const BoardState>(m_State), std::forward<const Move>(move)) > 0) {
+                        m_MoveCounter++;
                         return move;
-                    else 
+                    } else {
                         m_BadAttacks.PushBack(move);
+                    }
                 }
             }
 
@@ -46,8 +50,10 @@ Move MoveStream::Stream(bool quiescenceMode)
 
                 // Only return the killer move if pseudolegal
                 // Specifically don't set quiet move flag because killers are special cases
-                if (move.IsValid() && m_State.pieces.PieceInSquare(m_State.turn, move.from) == move.piece)
+                if (move.IsValid() && m_State.pieces.PieceInSquare(m_State.turn, move.from) == move.piece) {
+                    m_MoveCounter++;
                     return move;
+                }
             }
 
             m_Movegen.FindAllQuiets(m_Quiets);
@@ -60,6 +66,7 @@ Move MoveStream::Stream(bool quiescenceMode)
                 const Move& move = m_Quiets[m_QuietsIndex++];
                 if (move != m_BestMove && !m_Killers->Contains(move)) {
                     m_LastWasQuiet = true;
+                    m_MoveCounter++;
                     return move;
                 }
             }
@@ -73,6 +80,7 @@ Move MoveStream::Stream(bool quiescenceMode)
                 const Move& move = m_Attacks[m_AttacksIndex++];
                 if (move != m_BestMove) {
                     m_LastWasBadAttack = false;
+                    m_MoveCounter++;
                     return move;
                 }
             }
