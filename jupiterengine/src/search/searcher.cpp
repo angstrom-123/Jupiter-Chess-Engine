@@ -35,6 +35,7 @@ void Searcher::Reset()
     for (std::size_t i = 0; i < MAX_PLY; i++)
         m_Killers[i].Resize(0);
 
+    // Reset the timer
     m_Timer = ExecutionTimer();
 }
 
@@ -43,17 +44,13 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
     JUPITER_TRACE();
 
     Reset();
+    CalculateSearchTime(remainingMs);
 
-    TimePoint startPoint = m_Timer.Now();
     Move finalMove = Move::Invalid();
-
-    // If still in opening look up a book move
     if ((finalMove = PickOpeningMove(state)).IsValid())
         return finalMove;
 
-    // Decide how long to search for
-    CalculateSearchTime(remainingMs);
-
+    bool onlyOneMove = false;
     uint16_t depth = 0;
     while (++depth) {
         // Soft search bound checked at each iterative deepening iteration
@@ -63,51 +60,48 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
         m_LastNodesSearched++;
 
         int16_t depthUnits = depth * PLY_UNIT;
-
-        int32_t alpha = -INFINITY_EVAL;
-        int32_t beta = INFINITY_EVAL;
+        AlphaBeta window{};
         int32_t bestScore = -INFINITY_EVAL;
         Move bestMove = Move::Invalid();
 
+        // Do not update alpha and beta at the root
         Move ttMove = Move::Invalid();
         const TTEntry entry = m_TranspositionTable.Get(state.zobristKey);
         if (entry.IsValid() && entry.depth >= depth) {
             m_LastNodesLookedUp++;
-
-            // Only consider exact matches at root (no alpha or beta updates)
             if (entry.nodeType == NodeType::EXACT) {
                 finalMove = entry.bestMove;
                 continue;
             }
-
             ttMove = entry.bestMove;
         }
 
         Move move;
-        Movegen generator(state, m_AttackTable);
-        MoveStream movegen = MoveStream(state, generator, &m_Eval, &m_HistoryTable, &m_Killers[0], ttMove);
+        MoveStream movegen = MoveStream(state, Movegen(state, m_AttackTable), &m_Eval, &m_HistoryTable, &m_Killers[0], ttMove);
         while ((move = movegen.Stream()).IsValid()) {
-            // Make move and check legality
-            MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
-            if (!state.WasLegalMove(m_AttackTable, moveData)) {
-                state.UnmakeMove(moveData);
-                continue;
-            }
-
-            // Update state and search
-            history.Push(state);
-
             int32_t score = 0;
-            if (!history.IsRepetition()) {
-                int16_t nextDepth = depthUnits - PLY_UNIT + CalculateExtension(state, movegen);
-                score = PrincipalVariationSearch(state, history, movegen, alpha, beta, nextDepth, 1);
+
+            // Search move (if legal)
+            {
+                MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
+
+                if (!state.WasLegalMove(m_AttackTable, moveData)) {
+                    state.UnmakeMove(moveData);
+                    continue;
+                }
+
+                history.Push(state);
+
+                if (!history.IsRepetition()) {
+                    int16_t nextDepth = depthUnits - PLY_UNIT + CalculateExtension(state, movegen);
+                    score = PrincipalVariationSearch(state, history, movegen, window, nextDepth, 1);
+                }
+
+                history.Pop();
+                state.UnmakeMove(moveData);
             }
 
-            // Undo move
-            history.Pop();
-            state.UnmakeMove(moveData);
-
-            // If search terminated mid-move then we discard the search result
+            // If search terminated mid-depth then we discard the search result
             if (m_SearchAborted)
                 break;
 
@@ -115,11 +109,10 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = move;
-                if (score > alpha)
-                    alpha = score;
+                window.alpha = std::max(window.alpha, score);
             }
 
-            if (score >= beta) {
+            if (score >= window.beta) {
                 // History heuristic
                 m_HistoryTable[move.from][move.to] += depth * depth;
 
@@ -139,22 +132,24 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
         finalMove = bestMove;
 
         // Do not continue to higher depths if there is only one legal move
-        if (movegen.GetMoveCount() == 1)
+        if (movegen.GetMoveCount() == 1) {
+            onlyOneMove = true;
             break;
+        }
     }
 
     m_LastSearchDepth = (m_SearchAborted) ? depth - 1 : depth;
-    m_LastSearchTime = chrono::duration_cast<chrono::milliseconds>(m_Timer.Now() - startPoint).count();
+    m_LastSearchTime = m_Timer.SinceStart<chrono::milliseconds>().count();
     m_LastPawnsLookedUp = m_Eval.GetPawnTableHitCount() - m_LastPawnsLookedUp;
     m_LastEvaluations = m_Eval.GetEvaluationCount() - m_LastEvaluations;
 
-    if (m_LastSearchDepth <= 3)
+    if (m_LastSearchDepth <= 3 && !onlyOneMove)
         WARN("Extremely low search depth detected");
 
     return finalMove;
 }
 
-int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t ply)
+int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, int16_t depthUnits, uint8_t ply)
 {
     JUPITER_TRACE();
 
@@ -166,11 +161,11 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
 
     // Check if finished with this search
     if (depthUnits <= 0)
-        return Quiesce(state, history, alpha, beta, ply);
+        return Quiesce(state, history, window, ply);
 
     m_LastNodesSearched++;
 
-    int32_t startAlpha = alpha;
+    int32_t startAlpha = window.alpha;
 
     int32_t bestScore = -INFINITY_EVAL;
     Move bestMove = Move::Invalid();
@@ -191,56 +186,56 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
             case NodeType::EXACT:
                 return score;
             case NodeType::LOWER_BOUND:
-                alpha = std::max(alpha, score);
+                window.alpha = std::max(window.alpha, score);
                 break;
             case NodeType::UPPER_BOUND:
-                beta = std::min(beta, score);
+                window.beta = std::min(window.beta, score);
                 break;
         }
 
-        if (alpha >= beta)
-            return (entry.nodeType == NodeType::EXACT) ? score : alpha;
+        if (window.IsBetaCutoff())
+            return (entry.nodeType == NodeType::EXACT) ? score : window.alpha;
     }
 
     Move move;
     Movegen generator(state, m_AttackTable);
     MoveStream movegen = MoveStream(state, generator, &m_Eval, &m_HistoryTable, &m_Killers[ply], ttMove);
     while ((move = movegen.Stream()).IsValid()) {
-        // Make move and check legality
-        MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
-        if (!state.WasLegalMove(m_AttackTable, moveData)) {
-            state.UnmakeMove(moveData);
-            continue;
-        }
-
-        // Update state and search
-        history.Push(state);
-
         int32_t score = 0;
-        if (!history.IsRepetition()) {
-            int16_t nextDepth = depthUnits - PLY_UNIT + CalculateExtension(state, movegen);
-            score = PrincipalVariationSearch(state, history, movegen, alpha, beta, nextDepth, ply + 1);
+
+        // Search move (if legal)
+        {
+            MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
+
+            if (!state.WasLegalMove(m_AttackTable, moveData)) {
+                state.UnmakeMove(moveData);
+                continue;
+            }
+
+            history.Push(state);
+
+            if (!history.IsRepetition()) {
+                int16_t nextDepth = depthUnits - PLY_UNIT + CalculateExtension(state, movegen);
+                score = PrincipalVariationSearch(state, history, movegen, window, nextDepth, ply + 1);
+            }
+
+            history.Pop();
+            state.UnmakeMove(moveData);
         }
 
-        // Undo move
-        history.Pop();
-        state.UnmakeMove(moveData);
-
-        // If search terminated mid-move then we discard the search result
         if (m_SearchAborted)
-            return 0;
+            return 0; // The result is discarded at the call site
 
-        // Update search terms
         if (score > bestScore) {
             bestScore = score;
             bestMove = move;
-            if (score > alpha)
-                alpha = score;
+            window.alpha = std::max(window.alpha, score);
         }
 
-        if (score >= beta) {
+        if (score >= window.beta) {
             // History heuristic
-            m_HistoryTable[move.from][move.to] += (depthUnits / PLY_UNIT) * (depthUnits / PLY_UNIT);
+            uint8_t depth = depthUnits / PLY_UNIT;
+            m_HistoryTable[move.from][move.to] += depth * depth;
 
             // Killer move
             if (movegen.IsQuietMove() && move != m_Killers[0][0]) {
@@ -257,7 +252,7 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
 
     // Save search results to TT
     NodeType::Value nodeType = NodeType::EXACT;
-    if (bestScore >= beta)
+    if (bestScore >= window.beta)
         nodeType = NodeType::LOWER_BOUND;
     else if (bestScore <= startAlpha)
         nodeType = NodeType::UPPER_BOUND;
@@ -273,7 +268,7 @@ int32_t Searcher::Search(BoardState& state, History& history, int32_t alpha, int
     return bestScore;
 }
 
-int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, int32_t beta, uint8_t ply)
+int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window, uint8_t ply)
 {
     JUPITER_TRACE();
 
@@ -290,11 +285,8 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
     bool inCheck = KingUnderAttack(state, state.turn);
     int32_t bestScore = (inCheck) ? -INFINITY_EVAL : m_Eval.Evaluate(state);
 
-    // Update search terms
-    if (bestScore > alpha)
-        alpha = bestScore;
-
-    if (alpha >= beta)
+    window.alpha = std::max(window.alpha, bestScore);
+    if (window.IsBetaCutoff())
         return bestScore;
 
     Move bestMove = Move::Invalid();
@@ -311,7 +303,7 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
                 capture = Piece::PAWN;
 
             // If the capture doesn't raise alpha then skip the move
-            if (bestScore + Piece::Evaluate(capture) + DELTA_MARGIN < alpha)
+            if (bestScore + Piece::Evaluate(capture) + DELTA_MARGIN < window.alpha)
                 continue;
         }
 
@@ -327,7 +319,7 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
 
         int32_t score = 0;
         if (!history.IsRepetition())
-            score = PrincipalVariationQuiesce(state, history, movegen, alpha, beta, ply + 1);
+            score = PrincipalVariationQuiesce(state, history, movegen, window, ply + 1);
 
         // Undo move
         history.Pop();
@@ -341,11 +333,10 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
         if (score > bestScore) {
             bestMove = move;
             bestScore = score;
-            if (score > alpha)
-                alpha = score;
+            window.alpha = std::max(window.alpha, score);
         }
 
-        if (score >= beta) {
+        if (score >= window.beta) {
             // Killer move (possible since we search quiets if in check)
             if (movegen.IsQuietMove() && move != m_Killers[ply][0]) {
                 m_Killers[ply][1] = m_Killers[ply][0];
@@ -362,33 +353,33 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, int32_t alpha, in
     return bestScore;
 }
 
-int32_t Searcher::PrincipalVariationSearch(BoardState& state, History& history, const MoveStream& movegen, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t nextPly)
+int32_t Searcher::PrincipalVariationSearch(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, int16_t depthUnits, uint8_t nextPly)
 {
     if (movegen.IsFirstMove()) {
         // First (assumed best) move searched with full window
-        return -Search(state, history, -beta, -alpha, depthUnits, nextPly);
+        return -Search(state, history, -window, depthUnits, nextPly);
     } else {
         // Subsequent moves searched first with null window to check for alpha increase
-        int32_t score = -Search(state, history, -alpha - 1, -alpha, depthUnits, nextPly);
-        if (score > alpha && score < beta) {
+        int32_t score = -Search(state, history, window.Null(), depthUnits, nextPly);
+        if (window.Contains(score)) {
             // If the move raised alpha then re-search with full window
-            score = -Search(state, history, -beta, -alpha, depthUnits, nextPly);
+            score = -Search(state, history, -window, depthUnits, nextPly);
         }
         return score;
     }
 }
 
-int32_t Searcher::PrincipalVariationQuiesce(BoardState& state, History& history, const MoveStream& movegen, int32_t alpha, int32_t beta, uint8_t nextPly)
+int32_t Searcher::PrincipalVariationQuiesce(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, uint8_t nextPly)
 {
     if (movegen.IsFirstMove()) {
         // First (assumed best) move searched with full window
-        return -Quiesce(state, history, -beta, -alpha, nextPly);
+        return -Quiesce(state, history, -window, nextPly);
     } else {
         // Subsequent moves searched first with null window to check for alpha increase
-        int32_t score = -Quiesce(state, history, -alpha - 1, -alpha, nextPly);
-        if (score > alpha && score < beta) {
+        int32_t score = -Quiesce(state, history, window.Null(), nextPly);
+        if (window.Contains(score)) {
             // If the move raised alpha then re-search with full window
-            score = -Quiesce(state, history, -beta, -alpha, nextPly);
+            score = -Quiesce(state, history, -window, nextPly);
         }
         return score;
     }

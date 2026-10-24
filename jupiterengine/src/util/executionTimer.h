@@ -11,6 +11,11 @@ public:
     ExecutionTimer();
     TimePoint Now() const;
     TimePoint StartTime() const;
+    template<typename T> T SinceStart()
+    {
+        return chrono::duration_cast<T>(Now() - m_StartPoint);
+    }
+    
 
 private:
     TimePoint m_StartPoint;

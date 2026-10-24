@@ -18,6 +18,20 @@ using LineBuffer = Buffer<Move, MAX_PLY>;
 constexpr uint16_t PLY_UNIT = 64;
 constexpr uint16_t HALF_PLY_UNIT = PLY_UNIT / 2;
 
+struct AlphaBeta {
+    int32_t alpha{-INFINITY_EVAL};
+    int32_t beta{INFINITY_EVAL};
+
+    AlphaBeta() = default;
+    AlphaBeta(int32_t alpha, int32_t beta)
+        : alpha{alpha}, beta{beta} {}
+
+    AlphaBeta operator-() { return AlphaBeta(-beta, -alpha); }
+    AlphaBeta Null() { return AlphaBeta(-alpha - 1, -alpha); }
+    bool Contains(int32_t score) { return score > alpha && score < beta; }
+    bool IsBetaCutoff() { return alpha >= beta; }
+};
+
 class Searcher {
 public:
     Searcher(Zobrist& zobrist, PieceSquareTables& pieceSquareTables);
@@ -34,10 +48,10 @@ private:
     void CalculateSearchTime(uint64_t remainingMs);
     int16_t CalculateExtension(const BoardState& state, const MoveStream& movegen);
     Move PickOpeningMove(const BoardState& state);
-    int32_t Search(BoardState& state, History& history, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t ply);
-    int32_t Quiesce(BoardState& state, History& history, int32_t alpha, int32_t beta, uint8_t ply);
-    int32_t PrincipalVariationSearch(BoardState& state, History& history, const MoveStream& movegen, int32_t alpha, int32_t beta, int16_t depthUnits, uint8_t nextPly);
-    int32_t PrincipalVariationQuiesce(BoardState& state, History& history, const MoveStream& movegen, int32_t alpha, int32_t beta, uint8_t nextPly);
+    int32_t Search(BoardState& state, History& history, AlphaBeta window, int16_t depthUnits, uint8_t ply);
+    int32_t Quiesce(BoardState& state, History& history, AlphaBeta window, uint8_t ply);
+    int32_t PrincipalVariationSearch(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, int16_t depthUnits, uint8_t nextPly);
+    int32_t PrincipalVariationQuiesce(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, uint8_t nextPly);
     void Reset();
 
 private:
