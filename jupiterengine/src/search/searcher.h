@@ -14,6 +14,7 @@
 #include "search/transpositionTable.h"
 
 using LineBuffer = Buffer<Move, MAX_PLY>;
+using DivideBuffer = Buffer<std::pair<Move, uint64_t>, MAX_POSSIBLE_ATTACKS + MAX_POSSIBLE_QUIETS>;
 
 constexpr uint16_t PLY_UNIT = 64;
 constexpr uint16_t HALF_PLY_UNIT = PLY_UNIT / 2;
@@ -36,6 +37,8 @@ class Searcher {
 public:
     Searcher(Zobrist& zobrist, PieceSquareTables& pieceSquareTables);
     Move FindBest(BoardState& state, History& history, uint64_t remainingMs);
+	uint64_t Perft(BoardState& state, uint8_t depth);
+	uint64_t PerftDivide(BoardState& state, uint8_t depth, DivideBuffer& buffer);
     void SetTimeControl(float seconds, float increment);
     void TelemetryJSON(std::string& result) const;
     void MetricsJSON(std::string& result) const;
@@ -43,6 +46,7 @@ public:
     EvaluatorConstants EvalWeights() const;
 
 private:
+	uint64_t PerftRecurse(BoardState& state, uint8_t depth);
     void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv);
     bool KingUnderAttack(const BoardState& state, Color::Value turn);
     void CalculateSearchTime(uint64_t remainingMs);

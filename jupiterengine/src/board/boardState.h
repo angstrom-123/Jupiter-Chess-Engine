@@ -19,5 +19,6 @@ public:
 
     MoveData MakeMove(const Zobrist& zobrist, const PieceSquareTables& pst, Move move);
     void UnmakeMove(MoveData moveData);
+    MoveData MakeMoveRaw(Move move);
     bool WasLegalMove(const class AttackTable& attackTable, MoveData moveData);
 };

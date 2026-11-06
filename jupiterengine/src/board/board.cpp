@@ -112,6 +112,20 @@ namespace libjupiter {
         m_Searcher->MetricsJSON(result);
     }
 
+	uint64_t Board::Perft(uint8_t depth)
+	{
+		JUPITER_TRACE();
+
+		return m_Searcher->Perft(m_State, depth);
+	}
+
+	uint64_t Board::PerftDivide(uint8_t depth, DivideBuffer& buffer)
+	{
+		JUPITER_TRACE();
+
+		return m_Searcher->PerftDivide(m_State, depth, buffer);
+	}
+
     void Board::Show(std::string& result) const
     {
         JUPITER_TRACE();

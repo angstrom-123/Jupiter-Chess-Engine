@@ -148,26 +148,21 @@ void Movegen::FindKingQuiets(uint8_t index, QuietMoveBuffer& quiets) const
 {
     JUPITER_TRACE();
 
-    // Attacks
-    {
-        Bitboard attackBits = m_AttackTable.KingAttacks(index);
-        attackBits &= ~m_State.pieces.Occupancy();
+	Bitboard attackBits = m_AttackTable.KingAttacks(index);
+	attackBits &= ~m_State.pieces.Occupancy();
 
-        while (attackBits) {
-            uint8_t toIndex = std::countr_zero(attackBits);
-            quiets.EmplaceBack(index, toIndex, Piece::KING, Piece::Invalid());
-            attackBits &= (attackBits - 1);
-        }
-    }
+	while (attackBits) {
+		uint8_t toIndex = std::countr_zero(attackBits);
+		quiets.EmplaceBack(index, toIndex, Piece::KING, Piece::Invalid());
+		attackBits &= (attackBits - 1);
+	}
 
     // Castling
-    {
-        if ((m_State.rights & CastlingRight::Kingside(m_State.turn)) && !m_State.pieces.Has(index + 1) && !m_State.pieces.Has(index + 2))
-            quiets.EmplaceBack(index, index + 2, Piece::KING, Piece::Invalid());
+	if ((m_State.rights & CastlingRight::Kingside(m_State.turn)) && !m_State.pieces.Has(index + 1) && !m_State.pieces.Has(index + 2))
+		quiets.EmplaceBack(index, index + 2, Piece::KING, Piece::Invalid());
 
-        if ((m_State.rights & CastlingRight::Queenside(m_State.turn)) && !m_State.pieces.Has(index - 1) && !m_State.pieces.Has(index - 2) && !m_State.pieces.Has(index - 3))
-            quiets.EmplaceBack(index, index - 2, Piece::KING, Piece::Invalid());
-    }
+	if ((m_State.rights & CastlingRight::Queenside(m_State.turn)) && !m_State.pieces.Has(index - 1) && !m_State.pieces.Has(index - 2) && !m_State.pieces.Has(index - 3))
+		quiets.EmplaceBack(index, index - 2, Piece::KING, Piece::Invalid());
 }
 
 void Movegen::FindBishopAttacks(uint8_t index, AttackMoveBuffer& attacks) const

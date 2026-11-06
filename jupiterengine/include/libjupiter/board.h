@@ -22,6 +22,8 @@ namespace libjupiter {
         void GetTelemetry(std::string& result) const;
         void GetMetrics(std::string& result) const;
         void SetWeights(const EvaluatorConstants& weights);
+		uint64_t Perft(uint8_t depth);
+		uint64_t PerftDivide(uint8_t depth, DivideBuffer& buffer);
         EvaluatorConstants GetWeights() const;
 
     private:

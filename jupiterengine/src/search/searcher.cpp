@@ -149,6 +149,94 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
     return finalMove;
 }
 
+uint64_t Searcher::Perft(BoardState& state, uint8_t depth)
+{
+	JUPITER_TRACE();
+
+	if (depth == 0)
+		return 1;
+
+	return PerftRecurse(state, depth);
+}
+
+uint64_t Searcher::PerftDivide(BoardState& state, uint8_t depth, DivideBuffer& buffer)
+{
+	JUPITER_TRACE();
+
+	if (depth == 0)
+		return 1;
+
+    Movegen generator(state, m_AttackTable);
+
+	AttackMoveBuffer attacks{};
+	QuietMoveBuffer quiets{};
+
+	generator.FindAllAttacks(attacks);
+	generator.FindAllQuiets(quiets);
+
+	uint64_t total = 0;
+
+	for (const Move& move : attacks) {
+		MoveData moveData = state.MakeMoveRaw(move);
+		if (state.WasLegalMove(m_AttackTable, moveData)) {
+			uint64_t n = PerftRecurse(state, depth - 1);
+			buffer.PushBack(std::make_pair(move, n));
+			total += n;
+		}
+		state.UnmakeMove(moveData);
+	}
+
+	for (const Move& move : quiets) {
+		MoveData moveData = state.MakeMoveRaw(move);
+		if (state.WasLegalMove(m_AttackTable, moveData)) {
+			uint64_t n = PerftRecurse(state, depth - 1);
+			buffer.PushBack(std::make_pair(move, n));
+			total += n;
+		}
+		state.UnmakeMove(moveData);
+	}
+
+	return total;
+}
+
+
+uint64_t Searcher::PerftRecurse(BoardState& state, uint8_t depth)
+{
+	JUPITER_TRACE();
+
+	if (depth == 0) {
+		return 1;
+	}
+
+    Movegen generator(state, m_AttackTable);
+
+	AttackMoveBuffer attacks{};
+	QuietMoveBuffer quiets{};
+
+	generator.FindAllAttacks(attacks);
+	generator.FindAllQuiets(quiets);
+
+	uint64_t count = 0;
+
+	for (const Move& move : attacks) {
+		MoveData moveData = state.MakeMoveRaw(move);
+		if (state.WasLegalMove(m_AttackTable, moveData)) {
+			count += PerftRecurse(state, depth - 1);
+		}
+		state.UnmakeMove(moveData);
+	}
+
+	for (const Move& move : quiets) {
+		MoveData moveData = state.MakeMoveRaw(move);
+		if (state.WasLegalMove(m_AttackTable, moveData)) {
+			count += PerftRecurse(state, depth - 1);
+		}
+		state.UnmakeMove(moveData);
+	}
+
+	return count;
+}
+
 int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, int16_t depthUnits, uint8_t ply)
 {
     JUPITER_TRACE();

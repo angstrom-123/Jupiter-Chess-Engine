@@ -260,6 +260,46 @@ namespace py {
         return dict;
     }
 
+    static PyObject *BoardPerft(Board *self, PyObject *args)
+    {
+        JUPITER_TRACE();
+
+        if (!self->board)
+            return nullptr;
+        uint64_t depth;
+        if (!PyArg_ParseTuple(args, "K", &depth))
+            return nullptr;
+
+		uint64_t count = self->board->Perft(depth);
+		return PyLong_FromUnsignedLongLong(count);
+	}
+
+    static PyObject *BoardPerftDivide(Board *self, PyObject *args)
+    {
+        JUPITER_TRACE();
+
+        if (!self->board)
+            return nullptr;
+        uint64_t depth;
+        if (!PyArg_ParseTuple(args, "K", &depth))
+            return nullptr;
+
+		DivideBuffer buffer;
+		uint64_t count = self->board->PerftDivide(depth, buffer);
+		
+		PyObject *dict = PyDict_New();
+		if (!dict)
+			return nullptr;
+
+		for (const auto& [m, c] : buffer) {
+			PyObject *cLong =  PyLong_FromUnsignedLongLong(c);
+			PyDict_SetItemString(dict, m.ToLAN().chars, cLong);
+			Py_DECREF(cLong);
+		}
+
+		return Py_BuildValue("(KO)", count, dict);
+	}
+
     // Board Method Table
 
     static PyMethodDef boardMethods[] = {
@@ -270,6 +310,8 @@ namespace py {
         { "get_metrics", _PyCFunction_CAST(BoardGetMetrics), METH_NOARGS, "Get internal engine metrics as stringified JSON." },
         { "set_weights", _PyCFunction_CAST(BoardSetWeights), METH_VARARGS | METH_KEYWORDS, "Adjust evaluation weights and factors from provided defaults." },
         { "get_weights", _PyCFunction_CAST(BoardGetWeights), METH_NOARGS, "Get current evaluation weights as a dict." },
+        { "perft", _PyCFunction_CAST(BoardPerft), METH_VARARGS, "Count all legal moves in the position to the desired depth." },
+        { "perft_divide", _PyCFunction_CAST(BoardPerftDivide), METH_VARARGS, "Count all legal moves in the position to the desired depth per starting move." },
         { nullptr, nullptr, 0, nullptr }
     };
 
