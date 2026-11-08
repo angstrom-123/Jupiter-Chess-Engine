@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core.h"
+#include "util/instrumenter.h"
 #include "util/log.h"
 #include <utility>
 #include <sstream>

@@ -27,7 +27,7 @@ namespace libjupiter {
         EvaluatorConstants GetWeights() const;
 
     private:
-        void ComputePSTScore();
+        PSTScore ComputePSTScore();
         void StartPos();
 
     private:

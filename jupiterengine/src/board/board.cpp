@@ -23,8 +23,7 @@ namespace libjupiter {
         else
             fen::Parse(fen, &m_HalfMoves, &m_FullMoves, m_State);
 
-        ComputePSTScore();
-
+        m_State.pstScore = ComputePSTScore();
         m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
         m_State.pawnKey = m_Zobrist.ComputePawnKey(m_State);
 
@@ -37,21 +36,22 @@ namespace libjupiter {
     }
 
     // Now doing incremental updates so need to initialise it
-    void Board::ComputePSTScore()
+    PSTScore Board::ComputePSTScore()
     {
         JUPITER_TRACE();
 
-        m_State.pstScore = PSTScore(0, 0);
+        PSTScore score = PSTScore(0, 0);
         for (Color::Value color : { Color::WHITE, Color::BLACK }) {
             for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
                 Bitboard occupancy = m_State.pieces.Occupancy(color, piece);
                 while (occupancy) {
                     uint8_t index = std::countr_zero(occupancy);
-                    m_State.pstScore += m_PieceSquareTables.Get(color, piece, index);
+                    score += m_PieceSquareTables.Get(color, piece, index);
                     occupancy &= (occupancy - 1);
                 }
             }
         }
+        return score;
     }
 
     void Board::SetTimeControl(float seconds, float increment)

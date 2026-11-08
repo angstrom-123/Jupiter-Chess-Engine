@@ -77,7 +77,8 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
         }
 
         Move move;
-        MoveStream movegen = MoveStream(state, Movegen(state, m_AttackTable), &m_Eval, &m_HistoryTable, &m_Killers[0], ttMove);
+        Movegen generator(state, m_AttackTable);
+        MoveStream movegen = MoveStream(state, generator, &m_Eval, &m_HistoryTable, &m_Killers[0], ttMove);
         while ((move = movegen.Stream()).IsValid()) {
             int32_t score = 0;
 

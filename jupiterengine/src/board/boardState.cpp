@@ -217,6 +217,7 @@ MoveData BoardState::MakeMoveRaw(Move move)
 
     // For unmaking the move later
     MoveData moveData = {
+        .zobristKey = zobristKey,
         .pawnKey = pawnKey,
         .move = move,
         .capture = capture,

@@ -50,9 +50,8 @@ void Movegen::FindAllAttacks(AttackMoveBuffer& attacks) const
 
 void Movegen::FindAllQuiets(QuietMoveBuffer& quiets) const
 {
-    JUPITER_TRACE();
-
-    Bitboard queens = m_State.pieces.Occupancy(m_State.turn, Piece::QUEEN);
+    Bitboard queens;
+    queens = m_State.pieces.Occupancy(m_State.turn, Piece::QUEEN);
     while (queens) {
         uint8_t index = std::countr_zero(queens);
         FindQueenQuiets(index, quiets);
