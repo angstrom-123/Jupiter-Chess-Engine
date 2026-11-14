@@ -24,7 +24,7 @@ struct EvaluatorConstants {
     int32_t mobilityFactor{5};
     int32_t kingPawnTropismFactors[PawnKind::MAX_ENUM]{2, 3, 6};
     int32_t missingShieldPawnFactor{-40};
-    int32_t stormingPawnFactor{-7};
+    int32_t stormingPawnFactor{-15};
     int32_t sliderOpenFileFactor{45};
     int32_t weakPawnFactor{-25};
     int32_t connectedPawnFactor{15};
@@ -32,19 +32,34 @@ struct EvaluatorConstants {
     static EvaluatorConstants Tuned()
     {
         return EvaluatorConstants {
-            .materialWeight = 1.7982300519943237,
-            .pstWeight = 0.8320792317390442,
-            .mopupProximityFactor = -4,
-            .mopupEdgeFactor = 7,
-            .kingMobilityFactor = -22,
+            .materialWeight = 2.233424259342581,
+            .pstWeight = 1.931925026610482,
+            .mopupProximityFactor = 7,
+            .mopupEdgeFactor = 3,
+            .kingMobilityFactor = -56,
             .mobilityFactor = 3,
-            .kingPawnTropismFactors = { -3, 8, 5 },
-            .missingShieldPawnFactor = -29,
-            .stormingPawnFactor = -3,
-            .sliderOpenFileFactor = 44,
-            .weakPawnFactor = -23,
-            .connectedPawnFactor = 25
+            .kingPawnTropismFactors = { -1, 2, 17 },
+            .missingShieldPawnFactor = -45,
+            .stormingPawnFactor = -4,
+            .sliderOpenFileFactor = 6,
+            .weakPawnFactor = -11,
+            .connectedPawnFactor = 24,
         };
+
+        // return EvaluatorConstants {
+        //     .materialWeight = 0.
+        //     .pstWeight = 0.8320792317390442,
+        //     .mopupProximityFactor = -4,
+        //     .mopupEdgeFactor = 7,
+        //     .kingMobilityFactor = -22,
+        //     .mobilityFactor = 3,
+        //     .kingPawnTropismFactors = { -3, 8, 5 },
+        //     .missingShieldPawnFactor = -29,
+        //     .stormingPawnFactor = -3,
+        //     .sliderOpenFileFactor = 44,
+        //     .weakPawnFactor = -23,
+        //     .connectedPawnFactor = 25
+        // };
     }
 };
 

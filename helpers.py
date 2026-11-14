@@ -24,7 +24,7 @@ class Range():
     def __neg__(self) -> "Range":
         return Range(-self.max, -self.min)
 
-SPSA_WEIGHT_RANGE: Range = Range(0.0, 2.0)
+SPSA_WEIGHT_RANGE: Range = Range(0.0, 3.0)
 SPSA_SMALL_RANGE: Range = Range(0.0, 25.0)
 SPSA_LARGE_RANGE: Range = Range(0.0, 100.0)
 

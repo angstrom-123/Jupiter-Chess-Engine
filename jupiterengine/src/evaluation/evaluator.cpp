@@ -321,10 +321,10 @@ float Evaluator::GamePhase(const BoardState& state) const
 
     constexpr int64_t MAX_PHASE = (QUEEN_PHASE * 2) + (ROOK_PHASE * 4) + (BISHOP_PHASE * 4) + (KNIGHT_PHASE * 4);
 
-    int64_t nQueens = state.pieces.Count(friendly, Piece::QUEEN) - state.pieces.Count(enemy, Piece::QUEEN);
-    int64_t nRooks = state.pieces.Count(friendly, Piece::ROOK) - state.pieces.Count(enemy, Piece::ROOK);
-    int64_t nBishops = state.pieces.Count(friendly, Piece::BISHOP) - state.pieces.Count(enemy, Piece::BISHOP);
-    int64_t nKnights = state.pieces.Count(friendly, Piece::KNIGHT) - state.pieces.Count(enemy, Piece::KNIGHT);
+    int64_t nQueens = state.pieces.Count(friendly, Piece::QUEEN) + state.pieces.Count(enemy, Piece::QUEEN);
+    int64_t nRooks = state.pieces.Count(friendly, Piece::ROOK) + state.pieces.Count(enemy, Piece::ROOK);
+    int64_t nBishops = state.pieces.Count(friendly, Piece::BISHOP) + state.pieces.Count(enemy, Piece::BISHOP);
+    int64_t nKnights = state.pieces.Count(friendly, Piece::KNIGHT) + state.pieces.Count(enemy, Piece::KNIGHT);
 
     int64_t currentPhase = (QUEEN_PHASE * nQueens) + (ROOK_PHASE * nRooks) + (BISHOP_PHASE * nBishops) + (KNIGHT_PHASE * nKnights);
     currentPhase = std::min(currentPhase, MAX_PHASE); // Clamp in case of promotions
