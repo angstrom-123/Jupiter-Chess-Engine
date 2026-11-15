@@ -1,6 +1,7 @@
 # Jupiter Chess Engine
 
 A chess engine written in c++ as a python library.
+Performs roughly equivalent to singlethreaded stockfish 19 with elo limit of 2000. 
 Written to integrate directly with [Jupiter Client](https://github.com/angstrom-123/Jupiter-Chess-Interface)
 
 - `jupiter.py` integrates with [Jupiter Client](https://github.com/angstrom-123/Jupiter-Chess-Interface)
