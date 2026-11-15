@@ -29,7 +29,7 @@ struct EvaluatorConstants {
     int32_t weakPawnFactor{-25};
     int32_t connectedPawnFactor{15};
 
-    static EvaluatorConstants Tuned()
+    static consteval EvaluatorConstants Tuned()
     {
         return EvaluatorConstants {
             .materialWeight = 2.233424259342581,
@@ -45,21 +45,6 @@ struct EvaluatorConstants {
             .weakPawnFactor = -11,
             .connectedPawnFactor = 24,
         };
-
-        // return EvaluatorConstants {
-        //     .materialWeight = 0.
-        //     .pstWeight = 0.8320792317390442,
-        //     .mopupProximityFactor = -4,
-        //     .mopupEdgeFactor = 7,
-        //     .kingMobilityFactor = -22,
-        //     .mobilityFactor = 3,
-        //     .kingPawnTropismFactors = { -3, 8, 5 },
-        //     .missingShieldPawnFactor = -29,
-        //     .stormingPawnFactor = -3,
-        //     .sliderOpenFileFactor = 44,
-        //     .weakPawnFactor = -23,
-        //     .connectedPawnFactor = 25
-        // };
     }
 };
 
@@ -95,8 +80,6 @@ private:
     int32_t Mobility(const BoardState& state, const struct PositionData& data) const;
 
 private:
-    // TODO: More tuning?
-    // EvaluatorConstants m_Constants{};
     EvaluatorConstants m_Constants{EvaluatorConstants::Tuned()};
 
     uint64_t m_PawnTableHits{0};
