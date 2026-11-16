@@ -9,18 +9,8 @@
 
 namespace fs = std::filesystem;
 
-// Higher quality book than original
-#define USE_LUMBRAS_BOOK true
-
-// TODO: Tune the weight factor so that we play from book, but avoid the really bad moves still
-const float WEIGHT_FACTOR = 0.70; // Only allow moves within 30% of best move in whole book
 const uint64_t POLYGLOT_ENTRY_SIZE = 16;
-
-#if USE_LUMBRAS_BOOK
-    const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "lumbras_book.bin"; 
-#else
-    const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "book.bin";
-#endif
+const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "8_moves_v3_book.bin";
 
 const uint64_t randoms[781] = {
     0x9D39247E33776D41, 0x2AF7398005AAA5C7, 0x44DB015024623547, 0x9C15F73E62A76AE2,
@@ -242,6 +232,7 @@ OpeningBook::OpeningBook()
     // Read in polyglot file
     std::ifstream file(BOOK_FILE_PATH, std::ios::in | std::ios::binary | std::ios::ate);
     m_FileSizeBytes = file.tellg();
+    INFO("size: " << m_FileSizeBytes);
     file.seekg(0, std::ios::beg);
     m_Bytes.resize(m_FileSizeBytes);
     file.read(reinterpret_cast<char *>(m_Bytes.data()), m_FileSizeBytes);
@@ -305,9 +296,7 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves) cons
             break; // Reached the end of the block
 
         // Read back the move weight first and discard if too low
-        uint16_t weight = READ_U16(m_Bytes, offset + 10);
-        if (weight >= (m_BestWeight * WEIGHT_FACTOR))
-            moves.PushBack(ParseMove(std::forward<const BoardState>(state), READ_U64(m_Bytes, offset + 8)));
+        moves.PushBack(ParseMove(std::forward<const BoardState>(state), READ_U64(m_Bytes, offset + 8)));
 
         firstIndex++;
     }
