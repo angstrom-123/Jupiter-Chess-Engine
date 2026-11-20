@@ -1,99 +1,92 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+#include "evaluation/evaluator.h"
 #include "movegen/move.h"
 #include "board/zobrist.h"
 
-constexpr uint64_t TRANSPOSITION_TABLE_KEY_BITS = 25;
+// constexpr uint64_t TRANSPOSITION_TABLE_KEY_BITS = 25; // 512 MiB
+constexpr uint64_t TRANSPOSITION_TABLE_KEY_BITS = 23; // 128 MiB
 constexpr std::size_t TRANSPOSITION_TABLE_SIZE = 1ull << TRANSPOSITION_TABLE_KEY_BITS;
 
-// TODO: Lock free table and multithreading
+// Memory prefetch with funky fallback. I don't expect it to run, but it's there 
+// anyway.
+INLINE void Prefetch(const void * p)
+{
+    #if defined(__GNUC__) || defined(__clang__)
+        __builtin_prefetch(p, 0, 3);
+    #elif defined(_MSC_VER)
+        _mm__prefetch(reinterpret_cast<const char *>(p), _MM_HINT_T0);
+    #else
+        #warning Fallback prefetch used on this platform
+        volatile const uint8_t *v = reinterpret_cast<volatile const uint8_t *>(p);
+        (void) *v;
+    #endif
+}
 
-struct NodeType {
+struct Cutoff {
     typedef enum : uint8_t {
-        UPPER_BOUND = 0,    // alpha cutoff
-        LOWER_BOUND = 1,    // beta cutoff
-        EXACT = 2           // no cutoff
+        NONE = 0,
+        ALPHA = 1,
+        BETA = 2
     } Value;
-
-    static const char *Show(Value value) 
-    {
-        switch (value) {
-            case UPPER_BOUND: return "Upper Bound";
-            case LOWER_BOUND: return "Lower Bound";
-            case EXACT: return "Exact";
-        }
-    }
 };
 
-struct TTEntryPacked {
-    ZobristKey hash{0};
-    int32_t score{0};
-    uint32_t payload{0};
+struct PackedAtomics {
+    // Zobrist key XOR data, used for XOR trick
+    std::atomic<uint64_t> key{0};
 
-    TTEntryPacked() = default;
-    TTEntryPacked(ZobristKey hash, uint8_t halfMove, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType)
-        : hash{hash}, score{score}
-    {
-        // 32 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 9  8  7  6  5  4  3  2  1 
-        // ------- depth---------- ----age---- --promo- --piece- -----from-------  -------to-------  type
-
-        payload |= static_cast<uint32_t>(depth & 0b11111111) << 24;
-        payload |= static_cast<uint32_t>(halfMove & 0b1111) << 20;
-        payload |= static_cast<uint32_t>(bestMove.promote) << 17;
-        payload |= static_cast<uint32_t>(bestMove.piece) << 14;
-        payload |= static_cast<uint32_t>(bestMove.from) << 8;
-        payload |= static_cast<uint32_t>(bestMove.to) << 2;
-        payload |= static_cast<uint32_t>(nodeType);
-    }
-    bool IsValid() const { return payload > 0; }
-    static TTEntryPacked Invalid() { return TTEntryPacked(); }
+    // Top 32 bits are the score, lower 32 bits are packed as follows:
+    //
+    // 32 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 9  8  7  6  5  4  3  2  1 
+    // ------- depth---------- ----age---- --promo- --piece- -----from-------  -------to------- cutoff
+    std::atomic<uint64_t> data{0};
 };
 
-struct TTEntry {
+struct TranspositionTableEntry {
     ZobristKey hash{0};
     int32_t score{0};
-    uint8_t depth{0};
-    uint8_t age{0};
     Move bestMove{Move::Invalid()};
-    NodeType::Value nodeType{NodeType::EXACT};
+    uint16_t halfMove{0};
+    uint8_t depth{0};
+    Cutoff::Value cutoff{Cutoff::NONE};
 
-    TTEntry() = default;
-    TTEntry(TTEntryPacked packed)
-        : hash{packed.hash}, score{packed.score}
-    {
-        // 32 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 9  8  7  6  5  4  3  2  1 
-        // ------- depth---------- ----age---- --promo- --piece- -----from-------  -------to-------  type
-
-        depth = packed.payload >> 24;
-        age = (packed.payload >> 20) & 0b1111;
-
-        Piece::Value promote = static_cast<Piece::Value>((packed.payload >> 17) & 0b111);
-        Piece::Value piece = static_cast<Piece::Value>((packed.payload >> 14) & 0b111);
-        uint8_t from = (packed.payload >> 8) & 0b111111;
-        uint8_t to = (packed.payload >> 2) & 0b111111;
-        bestMove = Move(from, to, piece, promote);
-
-        nodeType = static_cast<NodeType::Value>(packed.payload & 0b11);
-    }
-    bool IsValid() const { return hash > 0; }
-    static TTEntry Invalid() { return TTEntry(); }
+    INLINE static constexpr TranspositionTableEntry Invalid() { return TranspositionTableEntry {}; }
+    INLINE bool IsValid() { return bestMove.IsValid(); } // TT probing in search relies on this validating the bestmove validity
 };
 
 class TranspositionTable {
 public:
     TranspositionTable();
     ~TranspositionTable();
-
-    std::size_t OccupancyBytes() const { return m_Occupancy * sizeof(TTEntryPacked); }
-    TTEntry Get(ZobristKey key);
-    void Save(ZobristKey key, uint8_t halfMove, int32_t score, uint8_t depth, Move bestMove, NodeType::Value nodeType);
+    void Store(TranspositionTableEntry entry);
+    TranspositionTableEntry Probe(ZobristKey hash) const;
+    INLINE const void *Line(ZobristKey hash) const { return &m_Table[Index(hash)]; }
+    std::size_t OccupancyBytes() const;
+    INLINE static Cutoff::Value ClassifyCutoff(int32_t bestScore, int32_t startAlpha, int32_t windowBeta)
+    {
+        if (bestScore >= windowBeta) return Cutoff::BETA;
+        if (bestScore <= startAlpha) return Cutoff::ALPHA;
+        return Cutoff::NONE;
+    }
+    INLINE static int32_t NormalizeScore(int32_t bestScore, uint8_t ply)
+    {
+        if (bestScore > MATE_THRESHOLD) return bestScore + ply;
+        if (bestScore < -MATE_THRESHOLD) return bestScore - ply;
+        return bestScore;
+    }
+    INLINE static int32_t DenormalizeScore(int32_t score, uint8_t ply)
+    {
+        if (score > MATE_THRESHOLD) return score - ply;
+        if (score < -MATE_THRESHOLD) return score + ply;
+        return score;
+    }
 
 private:
-
-    INLINE std::size_t Index(ZobristKey key) const { return key & (TRANSPOSITION_TABLE_SIZE - 1); }
+    TranspositionTableEntry Decode(uint64_t key, uint64_t data) const;
+    INLINE std::size_t Index(ZobristKey hash) const { return hash & (TRANSPOSITION_TABLE_SIZE - 1); }
 
 private:
-    std::size_t m_Occupancy{0};
-    TTEntryPacked *m_Table{nullptr};
+    PackedAtomics *m_Table{nullptr};
 };

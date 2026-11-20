@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core.h"
-#include "util/instrumenter.h"
 #include "util/log.h"
 #include <utility>
 #include <sstream>
@@ -55,8 +54,8 @@ public:
     INLINE bool Has(Color::Value color, uint8_t index) const { return m_Combined[color] & (1ull << index); }
     INLINE bool Has(uint8_t index) const { return (m_Combined[Color::WHITE] | m_Combined[Color::BLACK]) & (1ull << index); }
     INLINE uint8_t Count(Color::Value color, Piece::Value piece) const { return std::popcount(m_Bits[color][piece]); }
-    INLINE Bitboard Occupancy(Piece::Value piece) const { return m_Bits[Color::WHITE][piece] | m_Bits[Color::BLACK][piece]; }
     INLINE Bitboard Occupancy(Color::Value color, Piece::Value piece) const { return m_Bits[color][piece]; }
+    INLINE Bitboard Occupancy(Piece::Value piece) const { return m_Bits[Color::WHITE][piece] | m_Bits[Color::BLACK][piece]; }
     INLINE Bitboard Occupancy(Color::Value color) const { return m_Combined[color]; }
     INLINE Bitboard Occupancy() const { return m_Combined[Color::WHITE] | m_Combined[Color::BLACK]; }
 

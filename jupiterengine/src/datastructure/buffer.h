@@ -2,6 +2,7 @@
 
 #include <iterator>
 #include <utility>
+#include "inlines.h"
 
 template<typename T, std::size_t capacity> class Buffer {
 public:
@@ -14,19 +15,19 @@ public:
             m_Data[m_Size++] = value;
     }
 
-    void PushBack(T &&value)
+    INLINE void PushBack(T &&value)
     {
         m_Data[m_Size++] = std::forward<T>(value);
     }
-    void PushBack(const T& value)
+    INLINE void PushBack(const T& value)
     {
         m_Data[m_Size++] = value;
     }
-    template<class... Args> void EmplaceBack(Args&&... args)
+    template<class... Args> INLINE void EmplaceBack(Args&&... args)
     {
         new (&m_Data[m_Size++]) T(std::forward<Args>(args)...);
     } 
-    void PopBack() 
+    INLINE void PopBack() 
     {
         m_Data[m_Size--].~T();
     }
@@ -36,19 +37,19 @@ public:
             m_Data[i].~T();
         m_Size = 0;
     }
-    void Resize(std::size_t size) 
+    INLINE void Resize(std::size_t size) 
     {
         m_Size = size;
     }
-    T *Data() 
+    INLINE T *Data() 
     {
         return m_Data;
     }
-    std::size_t Size() const 
+    INLINE std::size_t Size() const 
     {
         return m_Size;
     }
-    std::size_t Capacity() const 
+    INLINE std::size_t Capacity() const 
     {
         return capacity;
     }
@@ -60,59 +61,59 @@ public:
         }
         return false;
     }
-    T *begin() 
+    INLINE T *begin() 
     {
         return m_Data;
     }
-    T *end() 
+    INLINE T *end() 
     {
         return m_Data + m_Size;
     }
-    const T *begin() const 
+    INLINE const T *begin() const 
     { 
         return m_Data;
     } 
-    const T *end() const 
+    INLINE const T *end() const 
     {
         return m_Data + m_Size;
     }
-    const T *cbegin() const 
+    INLINE const T *cbegin() const 
     {
         return begin();
     }
-    const T *cend() const 
+    INLINE const T *cend() const 
     {
         return end();
     }
-    std::reverse_iterator<T> rbegin() 
+    INLINE std::reverse_iterator<T> rbegin() 
     {
         return std::reverse_iterator<T>(end());
     }
-    std::reverse_iterator<T> rend() 
+    INLINE std::reverse_iterator<T> rend() 
     {
         return std::reverse_iterator<T>(begin());
     }
-    std::reverse_iterator<const T> rbegin() const
+    INLINE std::reverse_iterator<const T> rbegin() const
     {
         return std::reverse_iterator<const T>(end());
     }
-    std::reverse_iterator<const T> rend() const
+    INLINE std::reverse_iterator<const T> rend() const
     {
         return std::reverse_iterator<const T>(begin());
     }
-    std::reverse_iterator<const T> crbegin() const
+    INLINE std::reverse_iterator<const T> crbegin() const
     {
         return rbegin();
     }
-    std::reverse_iterator<const T> crend() const
+    INLINE std::reverse_iterator<const T> crend() const
     {
         return rend();
     }
-    T& operator[](std::size_t i) 
+    INLINE T& operator[](std::size_t i) 
     { 
         return m_Data[i]; 
     }
-    const T& operator[](std::size_t i) const 
+    INLINE const T& operator[](std::size_t i) const 
     { 
         return m_Data[i]; 
     }

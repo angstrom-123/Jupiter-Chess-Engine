@@ -1,7 +1,7 @@
 #include "searcher.h"
 #include "board/boardState.h"
+#include "movegen/movegen.h"
 #include "util/executionTimer.h"
-#include "util/log.h"
 #include "movegen/move.h"
 #include "evaluation/evaluator.h"
 #include "movegen/moveStream.h"
@@ -25,18 +25,16 @@ Searcher::Searcher(Zobrist& zobrist, PieceSquareTables& pieceSquareTables)
 
 void Searcher::Reset()
 {
-    // Keeping these in object scope so all the functions can edit them
+    JUPITER_TRACE();
+
     m_SearchAborted = false;
     m_LastNodesSearched = 0;
     m_LastNodesQuiesced = 0;
     m_LastNodesLookedUp = 0;
-
-    // Clear killer moves
-    for (std::size_t i = 0; i < MAX_PLY; i++)
-        m_Killers[i].Resize(0);
-
-    // Reset the timer
     m_Timer = ExecutionTimer();
+
+    for (std::size_t i = 0; i < MAX_KILLERS + 1; i++) // + 1 here for the null slot at the end
+        m_Killers[i].Clear();
 }
 
 Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingMs)
@@ -50,7 +48,6 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
     if ((finalMove = PickOpeningMove(state)).IsValid())
         return finalMove;
 
-    bool onlyOneMove = false;
     uint16_t depth = 0;
     while (++depth) {
         // Soft search bound checked at each iterative deepening iteration
@@ -64,43 +61,48 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
         int32_t bestScore = -INFINITY_EVAL;
         Move bestMove = Move::Invalid();
 
+        // Initialise movegen
+        MoveStream movegen(state, m_AttackTable, m_Eval, m_HistoryTable, m_Killers[0], false);
+
         // Do not update alpha and beta at the root
-        Move ttMove = Move::Invalid();
-        const TTEntry entry = m_TranspositionTable.Get(state.zobristKey);
-        if (entry.IsValid() && entry.depth >= depth) {
-            m_LastNodesLookedUp++;
-            if (entry.nodeType == NodeType::EXACT) {
-                finalMove = entry.bestMove;
-                continue;
+        TranspositionTableEntry entry = m_TranspositionTable.Probe(state.zobristKey);
+        if (entry.IsValid() && entry.depth >= depth && state.IsPseudoLegal(movegen.GetAttacks(), movegen.GetQuiets(), entry.bestMove)) {
+            // Check legality of cache move
+            MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, entry.bestMove);
+            if (state.WasLegalMove(m_AttackTable, moveData)) {
+                m_LastNodesLookedUp++;
+                if (entry.cutoff == Cutoff::NONE) {
+                    finalMove = entry.bestMove;
+                    state.UnmakeMove(moveData); // Have to undo in here too because of continue
+                    continue;
+                }
+                movegen.SetTTMove(entry.bestMove);
             }
-            ttMove = entry.bestMove;
+            state.UnmakeMove(moveData);
         }
 
         Move move;
-        Movegen generator(state, m_AttackTable);
-        MoveStream movegen = MoveStream(state, generator, &m_Eval, &m_HistoryTable, &m_Killers[0], ttMove);
         while ((move = movegen.Stream()).IsValid()) {
             int32_t score = 0;
 
             // Search move (if legal)
-            {
-                MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
-
-                if (!state.WasLegalMove(m_AttackTable, moveData)) {
-                    state.UnmakeMove(moveData);
-                    continue;
-                }
-
-                history.Push(state);
-
-                if (!history.IsRepetition()) {
-                    int16_t nextDepth = depthUnits - PLY_UNIT + CalculateExtension(state, movegen);
-                    score = PrincipalVariationSearch(state, history, movegen, window, nextDepth, 1);
-                }
-
-                history.Pop();
+            MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
+            if (!state.WasLegalMove(m_AttackTable, moveData)) {
                 state.UnmakeMove(moveData);
+                continue;
             }
+            // Prefetch transposition table entry into the caches
+            Prefetch(m_TranspositionTable.Line(state.zobristKey));
+
+            history.Push(state);
+
+            if (!history.IsRepetition()) {
+                int16_t nextDepth = depthUnits - PLY_UNIT + CalculateExtension(state, movegen);
+                score = PrincipalVariationSearch(state, history, movegen, window, nextDepth, 1);
+            }
+
+            history.Pop();
+            state.UnmakeMove(moveData);
 
             // If search terminated mid-depth then we discard the search result
             if (m_SearchAborted)
@@ -118,10 +120,8 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
                 m_HistoryTable[move.from][move.to] += depth * depth;
 
                 // Killer move
-                if (movegen.IsQuietMove() && move != m_Killers[0][0]) {
-                    m_Killers[0][1] = m_Killers[0][0];
-                    m_Killers[0][0] = move;
-                }
+                if (movegen.IsQuietMove() && !m_Killers[0].Contains(move))
+                    m_Killers[0].Push(move);
                 break;
             }
         }
@@ -133,19 +133,15 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
         finalMove = bestMove;
 
         // Do not continue to higher depths if there is only one legal move
-        if (movegen.GetMoveCount() == 1) {
-            onlyOneMove = true;
+        if (movegen.GetMoveCount() == 1)
             break;
-        }
     }
 
+    // Save some info about the last search
     m_LastSearchDepth = (m_SearchAborted) ? depth - 1 : depth;
     m_LastSearchTime = m_Timer.SinceStart<chrono::milliseconds>().count();
     m_LastPawnsLookedUp = m_Eval.GetPawnTableHitCount() - m_LastPawnsLookedUp;
     m_LastEvaluations = m_Eval.GetEvaluationCount() - m_LastEvaluations;
-
-    if (m_LastSearchDepth <= 3 && !onlyOneMove)
-        WARN("Extremely low search depth detected");
 
     return finalMove;
 }
@@ -160,39 +156,41 @@ uint64_t Searcher::Perft(BoardState& state, uint8_t depth)
 	return PerftRecurse(state, depth);
 }
 
-uint64_t Searcher::PerftDivide(BoardState& state, uint8_t depth, DivideBuffer& buffer)
+uint64_t Searcher::PerftDivide(BoardState& state, uint8_t depth, PerftBuffer& buffer)
 {
 	JUPITER_TRACE();
 
 	if (depth == 0)
 		return 1;
 
-    Movegen generator(state, m_AttackTable);
-
-	AttackMoveBuffer attacks{};
-	QuietMoveBuffer quiets{};
-
-	generator.FindAllAttacks(attacks);
-	generator.FindAllQuiets(quiets);
-
 	uint64_t total = 0;
 
-	for (const Move& move : attacks) {
-		MoveData moveData = state.MakeMoveRaw(move);
+    // Count all attacks
+	AttackMoveBuffer attacks{};
+    movegen::FindAllAttacks(state, m_AttackTable, attacks);
+	for (const Move move : attacks) {
+        MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
 		if (state.WasLegalMove(m_AttackTable, moveData)) {
 			uint64_t n = PerftRecurse(state, depth - 1);
-			buffer.PushBack(std::make_pair(move, n));
 			total += n;
+
+            // Save the count for this starting move to the buffer
+			buffer.PushBack(std::make_pair(move, n));
 		}
 		state.UnmakeMove(moveData);
 	}
 
-	for (const Move& move : quiets) {
-		MoveData moveData = state.MakeMoveRaw(move);
+    // Count all quiets
+	QuietMoveBuffer quiets{};
+    movegen::FindAllQuiets(state, m_AttackTable, quiets);
+	for (const Move move : quiets) {
+        MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
 		if (state.WasLegalMove(m_AttackTable, moveData)) {
 			uint64_t n = PerftRecurse(state, depth - 1);
-			buffer.PushBack(std::make_pair(move, n));
 			total += n;
+
+            // Save the count for this starting move to the buffer
+			buffer.PushBack(std::make_pair(move, n));
 		}
 		state.UnmakeMove(moveData);
 	}
@@ -205,33 +203,26 @@ uint64_t Searcher::PerftRecurse(BoardState& state, uint8_t depth)
 {
 	JUPITER_TRACE();
 
-	if (depth == 0) {
+	if (depth == 0)
 		return 1;
-	}
-
-    Movegen generator(state, m_AttackTable);
-
-	AttackMoveBuffer attacks{};
-	QuietMoveBuffer quiets{};
-
-	generator.FindAllAttacks(attacks);
-	generator.FindAllQuiets(quiets);
 
 	uint64_t count = 0;
 
-	for (const Move& move : attacks) {
-		MoveData moveData = state.MakeMoveRaw(move);
-		if (state.WasLegalMove(m_AttackTable, moveData)) {
+	AttackMoveBuffer attacks{};
+    movegen::FindAllAttacks(state, m_AttackTable, attacks);
+	for (const Move move : attacks) {
+        MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
+		if (state.WasLegalMove(m_AttackTable, moveData))
 			count += PerftRecurse(state, depth - 1);
-		}
 		state.UnmakeMove(moveData);
 	}
 
-	for (const Move& move : quiets) {
-		MoveData moveData = state.MakeMoveRaw(move);
-		if (state.WasLegalMove(m_AttackTable, moveData)) {
+	QuietMoveBuffer quiets{};
+    movegen::FindAllQuiets(state, m_AttackTable, quiets);
+	for (const Move move : quiets) {
+        MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
+		if (state.WasLegalMove(m_AttackTable, moveData))
 			count += PerftRecurse(state, depth - 1);
-		}
 		state.UnmakeMove(moveData);
 	}
 
@@ -248,7 +239,7 @@ int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, 
         return 0;
     }
 
-    // Check if finished with this search
+    // Start quiescence if finished with this search
     if (depthUnits <= 0)
         return Quiesce(state, history, window, ply);
 
@@ -259,61 +250,59 @@ int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, 
     int32_t bestScore = -INFINITY_EVAL;
     Move bestMove = Move::Invalid();
 
-    Move ttMove = Move::Invalid();
-    const TTEntry entry = m_TranspositionTable.Get(state.zobristKey);
-    if (entry.IsValid() && entry.depth >= depthUnits / PLY_UNIT) {
-        m_LastNodesLookedUp++;
-        ttMove = entry.bestMove;
+    // Initialise movegen
+    MoveStream movegen(state, m_AttackTable, m_Eval, m_HistoryTable, m_Killers[std::min(ply, MAX_PLY)], false);
 
-        int32_t score = entry.score;
-        if (entry.score > MATE_THRESHOLD)
-            score -= ply;
-        else if (entry.score < -MATE_THRESHOLD)
-            score += ply;
+    TranspositionTableEntry entry = m_TranspositionTable.Probe(state.zobristKey);
+    if (entry.IsValid() && entry.depth >= depthUnits / PLY_UNIT && state.IsPseudoLegal(movegen.GetAttacks(), movegen.GetQuiets(), entry.bestMove)) {
+        // Check legality of cache move
+        MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, entry.bestMove);
+        if (state.WasLegalMove(m_AttackTable, moveData)) {
+            m_LastNodesLookedUp++;
+            movegen.SetTTMove(entry.bestMove);
+            int32_t score = TranspositionTable::DenormalizeScore(entry.score, ply);
 
-        switch (entry.nodeType) {
-            case NodeType::EXACT:
+            if (entry.cutoff == Cutoff::NONE) {
+                state.UnmakeMove(moveData); // Unmake here because of return
                 return score;
-            case NodeType::LOWER_BOUND:
-                window.alpha = std::max(window.alpha, score);
-                break;
-            case NodeType::UPPER_BOUND:
-                window.beta = std::min(window.beta, score);
-                break;
-        }
+            }
 
-        if (window.IsBetaCutoff())
-            return (entry.nodeType == NodeType::EXACT) ? score : window.alpha;
+            window.Update(entry.cutoff, score);
+            if (window.IsBetaCutoff()) { // Beta cutoff means opponent won't let this branch happen
+                state.UnmakeMove(moveData); // Unmake here because of return
+                return window.alpha; 
+            }
+        }
+        state.UnmakeMove(moveData);
     }
 
     Move move;
-    Movegen generator(state, m_AttackTable);
-    MoveStream movegen = MoveStream(state, generator, &m_Eval, &m_HistoryTable, &m_Killers[ply], ttMove);
     while ((move = movegen.Stream()).IsValid()) {
         int32_t score = 0;
 
         // Search move (if legal)
-        {
-            MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
-
-            if (!state.WasLegalMove(m_AttackTable, moveData)) {
-                state.UnmakeMove(moveData);
-                continue;
-            }
-
-            history.Push(state);
-
-            if (!history.IsRepetition()) {
-                int16_t nextDepth = depthUnits - PLY_UNIT + CalculateExtension(state, movegen);
-                score = PrincipalVariationSearch(state, history, movegen, window, nextDepth, ply + 1);
-            }
-
-            history.Pop();
+        MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
+        if (!state.WasLegalMove(m_AttackTable, moveData)) {
             state.UnmakeMove(moveData);
+            continue;
         }
 
+        // Prefetch transposition table entry into the caches
+        Prefetch(m_TranspositionTable.Line(state.zobristKey));
+
+        history.Push(state);
+
+        if (!history.IsRepetition()) {
+            int16_t nextDepth = depthUnits - PLY_UNIT + CalculateExtension(state, movegen);
+            score = PrincipalVariationSearch(state, history, movegen, window, nextDepth, ply + 1);
+        }
+
+        history.Pop();
+        state.UnmakeMove(moveData);
+
+        // Return a dummy value, discarded at call site
         if (m_SearchAborted)
-            return 0; // The result is discarded at the call site
+            return 0;
 
         if (score > bestScore) {
             bestScore = score;
@@ -326,33 +315,29 @@ int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, 
             uint8_t depth = depthUnits / PLY_UNIT;
             m_HistoryTable[move.from][move.to] += depth * depth;
 
-            // Killer move
-            if (movegen.IsQuietMove() && move != m_Killers[0][0]) {
-                m_Killers[0][1] = m_Killers[0][0];
-                m_Killers[0][0] = move;
+            // Killer moves
+            if (ply < MAX_PLY) {
+                if (movegen.IsQuietMove() && !m_Killers[ply].Contains(move)) {
+                    m_Killers[ply].Push(move);
+                }
             }
             break;
         }
     }
 
-    // Checkmate or stalemate
+    // Checkmate or stalemate + early exit, DO NOT STORE INVALIDS TO TT
     if (!bestMove.IsValid())
-        bestScore = KingUnderAttack(state, state.turn) ? -MATE_EVAL + ply : 0;
+        return state.KingUnderAttack(m_AttackTable) ? -MATE_EVAL + ply : 0;
 
-    // Save search results to TT
-    NodeType::Value nodeType = NodeType::EXACT;
-    if (bestScore >= window.beta)
-        nodeType = NodeType::LOWER_BOUND;
-    else if (bestScore <= startAlpha)
-        nodeType = NodeType::UPPER_BOUND;
-
-    // Score mate without ply in the TT if above the mate threshold
-    int32_t ttScore = bestScore;
-    if (bestScore > MATE_THRESHOLD)
-        ttScore += ply;
-    else if (bestScore < -MATE_THRESHOLD)
-        ttScore -= ply;
-    m_TranspositionTable.Save(state.zobristKey, state.halfMove, ttScore, depthUnits / PLY_UNIT, bestMove, nodeType);
+    // Save to transposition table
+    m_TranspositionTable.Store(TranspositionTableEntry {
+        .hash = state.zobristKey, 
+        .score = TranspositionTable::NormalizeScore(bestScore, ply),
+        .bestMove = bestMove,
+        .halfMove = state.halfMove,
+        .depth = static_cast<uint8_t>(depthUnits / PLY_UNIT),
+        .cutoff = TranspositionTable::ClassifyCutoff(bestScore, startAlpha, window.beta)
+    });
 
     return bestScore;
 }
@@ -371,7 +356,7 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window,
     m_LastNodesSearched++;
 
     // Standing Pat (lower bound on score) is only an option when not in check
-    bool inCheck = KingUnderAttack(state, state.turn);
+    bool inCheck = state.KingUnderAttack(m_AttackTable);
     int32_t bestScore = (inCheck) ? -INFINITY_EVAL : m_Eval.Evaluate(state);
 
     window.alpha = std::max(window.alpha, bestScore);
@@ -379,11 +364,11 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window,
         return bestScore;
 
     Move bestMove = Move::Invalid();
+
+    // Quiescence mode, quiet moves only considered when in check
+    MoveStream movegen(state, m_AttackTable, m_Eval, m_HistoryTable, m_Killers[std::min(ply, MAX_PLY)], !inCheck);
     Move move;
-    Movegen generator(state, m_AttackTable);
-    MoveStream movegen = MoveStream(state, generator, &m_Eval, &m_HistoryTable, &m_Killers[ply]);
-    // Consider quiet moves if in check
-    while ((move = movegen.Stream(!inCheck)).IsValid()) {
+    while ((move = movegen.Stream()).IsValid()) {
         // Delta pruning (only non-promotions when not in check)
         if (!inCheck && !Piece::IsValid(move.promote)) {
             const int32_t DELTA_MARGIN = Piece::Evaluate(Piece::KNIGHT); // TODO: This should be tunable?
@@ -396,25 +381,24 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window,
                 continue;
         }
 
-        // Make move and check legality
+        int32_t score = 0;
+
+        // Search move (if legal)
         MoveData moveData = state.MakeMove(m_Zobrist, m_PieceSquareTables, move);
         if (!state.WasLegalMove(m_AttackTable, moveData)) {
             state.UnmakeMove(moveData);
             continue;
         }
 
-        // Update state and search
         history.Push(state);
 
-        int32_t score = 0;
         if (!history.IsRepetition())
             score = PrincipalVariationQuiesce(state, history, movegen, window, ply + 1);
 
-        // Undo move
         history.Pop();
         state.UnmakeMove(moveData);
 
-        // If search terminated mid-move then we discard the search result
+        // Return a dummy value, discarded at call site
         if (m_SearchAborted)
             return 0;
 
@@ -426,10 +410,12 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window,
         }
 
         if (score >= window.beta) {
-            // Killer move (possible since we search quiets if in check)
-            if (movegen.IsQuietMove() && move != m_Killers[ply][0]) {
-                m_Killers[ply][1] = m_Killers[ply][0];
-                m_Killers[ply][0] = move;
+            // Killer moves are strictly quiet moves which are avoided in quiescence. We can see 
+            // quiets here if a king is in check and must evade it
+            if (ply < MAX_PLY) {
+                if (movegen.IsQuietMove() && !m_Killers[ply].Contains(move)) {
+                    m_Killers[ply].Push(move);
+                }
             }
             break;
         }
@@ -444,6 +430,8 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window,
 
 int32_t Searcher::PrincipalVariationSearch(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, int16_t depthUnits, uint8_t nextPly)
 {
+    JUPITER_TRACE();
+
     if (movegen.IsFirstMove()) {
         // First (assumed best) move searched with full window
         return -Search(state, history, -window, depthUnits, nextPly);
@@ -460,6 +448,8 @@ int32_t Searcher::PrincipalVariationSearch(BoardState& state, History& history, 
 
 int32_t Searcher::PrincipalVariationQuiesce(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, uint8_t nextPly)
 {
+    JUPITER_TRACE();
+
     if (movegen.IsFirstMove()) {
         // First (assumed best) move searched with full window
         return -Quiesce(state, history, -window, nextPly);
@@ -530,14 +520,6 @@ EvaluatorConstants Searcher::EvalWeights() const
     return m_Eval.GetWeights();
 }
 
-bool Searcher::KingUnderAttack(const BoardState& state, Color::Value turn)
-{
-    JUPITER_TRACE();
-
-    uint64_t kingBit = state.pieces.Occupancy(turn, Piece::KING);
-    return m_AttackTable.SquareUnderAttack(state, kingBit, Color::Opposite(turn));
-}
-
 void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv)
 {
     JUPITER_TRACE();
@@ -551,9 +533,8 @@ void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t
     reconstructState.MakeMove(m_Zobrist, m_PieceSquareTables, firstMove);
 
     // Iterate over TT entries to find the moves from here
-    Movegen generator(state, m_AttackTable);
     for (uint8_t i = 1; i < depth; i++) {
-        TTEntry entry = m_TranspositionTable.Get(reconstructState.zobristKey);
+        TranspositionTableEntry entry = m_TranspositionTable.Probe(reconstructState.zobristKey);
         if (!entry.IsValid() || !entry.bestMove.IsValid())
             break;
 
@@ -573,6 +554,8 @@ void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t
 
 int16_t Searcher::CalculateExtension(const BoardState& state, const MoveStream& movegen)
 {
+    JUPITER_TRACE();
+
     int16_t extension = 0;
 
     // Attacks with negative SEE searched shallower
@@ -580,7 +563,7 @@ int16_t Searcher::CalculateExtension(const BoardState& state, const MoveStream& 
         extension -= PLY_UNIT;
 
     // Extend when giving or receiving check
-    if (KingUnderAttack(state, state.turn) || KingUnderAttack(state, Color::Opposite(state.turn)))
+    if (state.KingUnderAttack(m_AttackTable) || state.KingUnderAttack(m_AttackTable, Color::Opposite(state.turn)))
         extension += PLY_UNIT;
 
     return extension;

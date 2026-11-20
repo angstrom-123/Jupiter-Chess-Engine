@@ -15,8 +15,8 @@ union LongAlgebraicMove {
     };
     char chars[8];
 
-    bool IsValid() const { return chars[0] != '\0'; }
-    static LongAlgebraicMove Invalid() { return LongAlgebraicMove { .chars = { '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0' } }; }
+    INLINE bool IsValid() const { return chars[0] != '\0'; }
+    INLINE static LongAlgebraicMove Invalid() { return LongAlgebraicMove { .chars = { '\0', '\0', '\0', '\0', '\0', '\0', '\0', '\0' } }; }
     static LongAlgebraicMove FromChars(char *chars);
 };
 
@@ -26,12 +26,58 @@ struct Move {
     Piece::Value piece{Piece::Invalid()};
     Piece::Value promote{Piece::Invalid()};
 
-    LongAlgebraicMove ToLAN() const;
-    bool operator==(const Move& other) const = default;
+    Move() = default;
+    Move(uint8_t from, uint8_t to, Piece::Value piece, Piece::Value promote = Piece::Invalid())
+        : from{from}, to{to}, piece{piece}, promote{promote} {}
 
-    bool IsValid() const { return Piece::IsValid(piece); }
-    static Move Invalid() { return Move(); }
+    LongAlgebraicMove ToLAN() const;
+    bool operator==(const Move& other) const 
+    {
+        return from == other.from 
+            && to == other.to 
+            && piece == other.piece 
+            && promote == other.promote;
+    }
+    INLINE uint32_t Pack() const 
+    {
+        uint32_t packed = 0;
+        packed |= static_cast<uint32_t>(promote & 0b111) << 15;
+        packed |= static_cast<uint32_t>(piece & 0b111) << 12;
+        packed |= static_cast<uint32_t>(to & 0b111111) << 6;
+        packed |= static_cast<uint32_t>(from & 0b111111);
+        return packed;
+    }
+
+    INLINE bool IsValid() const 
+    { 
+        return Piece::IsValid(piece) 
+            && from < 64 
+            && to < 64 
+            && promote != Piece::PAWN 
+            && (promote == Piece::Invalid() || piece == Piece::PAWN); 
+    }
+    INLINE static constexpr Move Invalid() { return Move {}; }
+    INLINE static Move Unpack(uint32_t packed)
+    {
+        return Move(
+            static_cast<uint8_t>(packed & 0b111111),            // from
+            static_cast<uint8_t>((packed >> 6) & 0b111111),     // to
+            static_cast<Piece::Value>((packed >> 12) & 0b111),  // piece
+            static_cast<Piece::Value>((packed >> 15) & 0b111)   // promote
+        );
+    }
+    INLINE static uint8_t UnpackFrom(uint32_t packed) { return static_cast<uint8_t>(packed & 0b111111); }
+    INLINE static uint8_t UnpackTo(uint32_t packed) { return static_cast<uint8_t>((packed >> 6) & 0b111111); }
     static Move FromLAN(LongAlgebraicMove lan, const BitboardSet& piecePositions);
+    void Show()
+    {
+        std::stringstream ss;
+        ss << "from: " << (int) from << ", " << std::endl;
+        ss << "to: " << (int) to << ", " << std::endl;
+        ss << "piece: " << Piece::Show(piece) << "," << std::endl;
+        ss << "promote: " << Piece::Show(promote) << "," << std::endl;
+        INFO(ss.str());
+    }
 };
 
 struct MoveData {
@@ -46,9 +92,15 @@ struct MoveData {
     PSTScore pstScore{PSTScore(0, 0)};
 };
 
-const uint64_t MAX_POSSIBLE_QUIETS = 100;
-const uint64_t MAX_POSSIBLE_ATTACKS = 100;
+// TODO: Don't forget about these limits! (17/11/2026)
+//       My program does not currently do ANY bounds checks and will segfault in rare positions.
+//       This is NOT a safe assumption, but is extremely unlikely to bite me in regular play.
+//       If someone starts messing with the starting position, this WILL BREAK.
+const uint64_t MAX_QUIETS = 128; // Theoretical upper bound is 218 (9 queens)
+const uint64_t MAX_ATTACKS = 32; // Theoretical upper bound is 74 (9 queens)
 
-using QuietMoveBuffer = Buffer<Move, MAX_POSSIBLE_QUIETS>;
-using AttackMoveBuffer = Buffer<Move, MAX_POSSIBLE_ATTACKS>;
-using CombinedMoveBuffer = Buffer<Move, MAX_POSSIBLE_QUIETS + MAX_POSSIBLE_ATTACKS>;
+using QuietMoveBuffer = Buffer<Move, MAX_QUIETS>;
+using AttackMoveBuffer = Buffer<Move, MAX_ATTACKS>;
+using PackedQuietMoveBuffer = Buffer<uint32_t, MAX_QUIETS>;
+using PackedAttackMoveBuffer = Buffer<uint32_t, MAX_ATTACKS>;
+using CombinedMoveBuffer = Buffer<Move, MAX_QUIETS + MAX_ATTACKS>;

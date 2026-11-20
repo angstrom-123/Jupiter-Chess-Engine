@@ -11,6 +11,10 @@
 #include "util/instrumenter.h"
 #include "util/rng.h"
 
+#ifdef DEBUG
+    #include "util/exception.h"
+#endif
+
 static const fs::path MAGIC_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "magics.bin";
 
 AttackTable::AttackTable()
@@ -28,6 +32,22 @@ bool AttackTable::SquareUnderAttack(const BoardState& state, uint64_t bit, Color
     JUPITER_TRACE();
 
     uint8_t index = std::countr_zero(bit);
+
+#ifdef DEBUG
+    if (index > 63) {
+        ERROR("bit: " << bit << " (index " << (int) index << "), color: " << Color::Show(color));
+
+        ERROR("Indexing out of bounds in call to SquareUnderAttack() in state: ");
+        ERROR("half move: " << (int) state.halfMove);
+        ERROR("turn: " << Color::Show(state.turn));
+        ERROR("50 move count: " << (int) state.fiftyMoveCounter);
+        ERROR("ep square: " << (int) state.enPassantIndex);
+        ERROR("rights: " << (int) state.rights);
+        state.pieces.Show();
+        throw JupiterException("OOB attack index");
+    }
+#endif
+
     Bitboard occupancy = state.pieces.Occupancy();
 
     return (QueenAttacks(index, occupancy) & state.pieces.Occupancy(color, Piece::QUEEN))
@@ -100,7 +120,7 @@ void AttackTable::GeneratePawnTables()
     JUPITER_TRACE();
 
     for (uint8_t i = 0; i < 64; i++) {
-        Bitboard mask = 0;
+        Bitboard mask = 0ull;
         int8_t x = i % 8;
         int8_t y = i / 8;
         for (const auto delta : PAWN_ATTACKS) {
@@ -113,7 +133,7 @@ void AttackTable::GeneratePawnTables()
     }
 
     for (uint8_t i = 0; i < 64; i++) {
-        Bitboard mask = 0;
+        Bitboard mask = 0ull;
         int8_t x = i % 8;
         int8_t y = i / 8;
         for (const auto delta : PAWN_ATTACKS) {
@@ -131,7 +151,7 @@ void AttackTable::GenerateKnightTables()
     JUPITER_TRACE();
 
     for (uint8_t i = 0; i < 64; i++) {
-        Bitboard mask = 0;
+        Bitboard mask = 0ull;
         int8_t x = i % 8;
         int8_t y = i / 8;
         for (const auto delta : KNIGHT_ATTACKS) {
@@ -149,7 +169,7 @@ void AttackTable::GenerateKingTables()
     JUPITER_TRACE();
 
     for (uint8_t i = 0; i < 64; i++) {
-        Bitboard mask = 0;
+        Bitboard mask = 0ull;
         int8_t x = i % 8;
         int8_t y = i / 8;
         for (const auto delta : KING_ATTACKS) {
@@ -218,7 +238,7 @@ Bitboard AttackTable::GenerateSliderMask(uint8_t index, const int8_t (& deltas)[
 {
     JUPITER_TRACE();
 
-    Bitboard mask = 0;
+    Bitboard mask = 0ull;
     int8_t x = index % 8;
     int8_t y = index / 8;
     for (const auto delta : deltas) {
@@ -246,7 +266,7 @@ Bitboard AttackTable::GenerateSliderAttacks(uint8_t index, Bitboard occupancy, c
 {
     JUPITER_TRACE();
 
-    Bitboard mask = 0;
+    Bitboard mask = 0ull;
     int8_t x = index % 8;
     int8_t y = index / 8;
     for (const auto delta : deltas) {

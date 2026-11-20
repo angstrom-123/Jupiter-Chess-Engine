@@ -5,6 +5,10 @@
 #include "evaluation/pieceSquareTable.h"
 #include "movegen/move.h"
 
+#ifndef __clang__ 
+    #include "nullables.h"
+#endif
+
 class BoardState {
 public:
     BitboardSet pieces;
@@ -19,6 +23,8 @@ public:
 
     MoveData MakeMove(const Zobrist& zobrist, const PieceSquareTables& pst, Move move);
     void UnmakeMove(MoveData moveData);
-    MoveData MakeMoveRaw(Move move);
-    bool WasLegalMove(const class AttackTable& attackTable, MoveData moveData);
+    bool WasLegalMove(const class AttackTable& attackTable, MoveData moveData) const;
+    bool IsPseudoLegal(const AttackMoveBuffer& attacks, const QuietMoveBuffer& quiets, Move move) const;
+    bool KingUnderAttack(const AttackTable& attackTable, Color::Value turn) const;
+    bool KingUnderAttack(const AttackTable& attackTable) const;
 };

@@ -1,7 +1,6 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
-#include <exception>
 #include <iostream>
 
 #include <Python.h>
@@ -25,7 +24,12 @@ void SegfaultHandler(int signal)
 
     ERROR("\n=== FATAL (" << signal << ") ===");
     StackTracer::PrintTrace();
-    std::terminate();
+
+#ifdef DEBUG
+    StackTracer::PrintAllTraces();
+#endif
+
+    std::abort();
 }
 
 namespace py {
@@ -284,7 +288,7 @@ namespace py {
         if (!PyArg_ParseTuple(args, "K", &depth))
             return nullptr;
 
-		DivideBuffer buffer;
+		PerftBuffer buffer;
 		uint64_t count = self->board->PerftDivide(depth, buffer);
 		
 		PyObject *dict = PyDict_New();
@@ -397,6 +401,7 @@ PyMODINIT_FUNC PyInit_libjupiter(void)
     std::signal(SIGSEGV, SegfaultHandler);
     std::signal(SIGILL, SegfaultHandler);
     std::signal(SIGFPE, SegfaultHandler);
+    std::signal(SIGTERM, SegfaultHandler);
     PyObject * module = PyModule_Create(&libjupiterModule);
     if (!module)
         return nullptr;

@@ -3,9 +3,22 @@
 #include "movegen/move.h"
 #include "util/instrumenter.h"
 
+#ifdef DEBUG
+    #include "util/exception.h"
+#endif
+
 MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& pst, Move move)
 {
     JUPITER_TRACE();
+
+#ifdef DEBUG 
+    if (zobristKey != zobrist.ComputeKey(std::forward<const BoardState>(*this))) {
+        ERROR("Zobrist mismatch at the top of make move: ");
+        move.Show();
+        pieces.Show();
+        throw JupiterException("Zobrist mismatch");
+    }
+#endif
 
     Color::Value friendly = turn;
     Color::Value enemy = Color::Opposite(turn);
@@ -50,7 +63,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
 
     // Move rook if castling
     if (move.piece == Piece::KING) {
-        if (move.from - move.to == 2) { // Condition should hold even with underflow
+        if (move.from - move.to == 2) { // Condition holds even with underflow
             pieces.Unset(friendly, Piece::ROOK, move.from - 4);
             zobristKey ^= zobrist.ValueForPiece(friendly, Piece::ROOK, move.from - 4);
             pstScore -= pst.Get(friendly, Piece::ROOK, move.from - 4);
@@ -58,7 +71,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
             pieces.Set(friendly, Piece::ROOK, move.from - 1);
             zobristKey ^= zobrist.ValueForPiece(friendly, Piece::ROOK, move.from - 1);
             pstScore += pst.Get(friendly, Piece::ROOK, move.from - 1);
-        } else if (move.to - move.from == 2) {
+        } else if (move.to - move.from == 2) { // Condition holds even with underflow
             pieces.Unset(friendly, Piece::ROOK, move.from + 3);
             zobristKey ^= zobrist.ValueForPiece(friendly, Piece::ROOK, move.from + 3);
             pstScore -= pst.Get(friendly, Piece::ROOK, move.from + 3);
@@ -153,9 +166,25 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
         fiftyMoveCounter++;
 
     turn = enemy;
-    zobristKey ^= zobrist.ValueForTurn(friendly);
-    zobristKey ^= zobrist.ValueForTurn(enemy);
+    zobristKey ^= zobrist.ValueForTurn();
     halfMove++;
+
+#ifdef DEBUG
+    if (zobristKey != zobrist.ComputeKey(std::forward<const BoardState>(*this))) {
+        ERROR("Zobrist mismatch at the bottom of make move: ");
+        move.Show();
+        pieces.Show();
+        __builtin_dump_struct(this, printf);
+        throw JupiterException("Zobrist mismatch");
+    }
+
+    if (pieces.Occupancy(friendly, Piece::KING) == 0 || pieces.Occupancy(enemy, Piece::KING) == 0) {
+        ERROR("Missing king after making move: ");
+        move.Show();
+        pieces.Show();
+        throw JupiterException("King missing");
+    }
+#endif
 
     return moveData;
 }
@@ -164,7 +193,7 @@ void BoardState::UnmakeMove(MoveData moveData)
 {
     JUPITER_TRACE();
 
-    const Move& move = moveData.move;
+    const Move move = moveData.move;
 
     Color::Value friendly = moveData.turn;
     Color::Value enemy = Color::Opposite(moveData.turn);
@@ -182,10 +211,10 @@ void BoardState::UnmakeMove(MoveData moveData)
 
     // Replace rook if castling
     if (move.piece == Piece::KING) {
-        if (move.from - move.to == 2) { // Condition should hold fine even with underflow
+        if (move.from - move.to == 2) { // Condition holds even with underflow
             pieces.Set(friendly, Piece::ROOK, move.from - 4);
             pieces.Unset(friendly, Piece::ROOK, move.from - 1);
-        } else if (move.to - move.from == 2) {
+        } else if (move.to - move.from == 2) { // Condition holds even with underflow
             pieces.Set(friendly, Piece::ROOK, move.from + 3);
             pieces.Unset(friendly, Piece::ROOK, move.from + 1);
         }
@@ -205,114 +234,18 @@ void BoardState::UnmakeMove(MoveData moveData)
     pawnKey = moveData.pawnKey;
     pstScore = moveData.pstScore;
     halfMove--;
+
+#ifdef DEBUG
+    if (pieces.Occupancy(friendly, Piece::KING) == 0 || pieces.Occupancy(enemy, Piece::KING) == 0) {
+        ERROR("Missing king after unmaking move: ");
+        moveData.move.Show();
+        pieces.Show();
+        throw JupiterException("King missing");
+    }
+#endif
 }
 
-MoveData BoardState::MakeMoveRaw(Move move)
-{
-    JUPITER_TRACE();
-
-    Color::Value friendly = turn;
-    Color::Value enemy = Color::Opposite(turn);
-    Piece::Value capture = pieces.PieceInSquare(enemy, move.to);
-
-    // For unmaking the move later
-    MoveData moveData = {
-        .zobristKey = zobristKey,
-        .pawnKey = pawnKey,
-        .move = move,
-        .capture = capture,
-        .rights = rights,
-        .turn = turn,
-        .enPassantIndex = enPassantIndex,
-        .fiftyMoveCounter = fiftyMoveCounter,
-        .pstScore = pstScore,
-    };
-
-    // Move piece
-    pieces.Unset(friendly, move.piece, move.from);
-    if (Piece::IsValid(move.promote))
-        pieces.Set(friendly, move.promote, move.to);
-    else
-        pieces.Set(friendly, move.piece, move.to);
-
-    // Remove capture
-    if (Piece::IsValid(capture))
-        pieces.Unset(enemy, capture, move.to);
-
-    // Move rook if castling
-    if (move.piece == Piece::KING) {
-        if (move.from - move.to == 2) { // Condition should hold even with underflow
-            pieces.Unset(friendly, Piece::ROOK, move.from - 4);
-            pieces.Set(friendly, Piece::ROOK, move.from - 1);
-        } else if (move.to - move.from == 2) {
-            pieces.Unset(friendly, Piece::ROOK, move.from + 3);
-            pieces.Set(friendly, Piece::ROOK, move.from + 1);
-        }
-    }
-
-    // Remove pawn if en passant
-    const int8_t enPassantOffset[Color::MAX_ENUM] = { +8, -8 };
-    if (move.piece == Piece::PAWN && move.to == enPassantIndex) {
-        uint8_t pawnIndex = move.to + enPassantOffset[friendly];
-        pieces.Unset(enemy, Piece::PAWN, pawnIndex);
-    }
-
-	// Avoid updating castling rights after both sides lose the right
-    if (rights > 0) {
-		const uint8_t kingsideRookSquare[Color::MAX_ENUM] = { 63, 7 };
-		const uint8_t queensideRookSquare[Color::MAX_ENUM] = { 56, 0 };
-
-        // Remove castling rights if king moved
-        if (move.piece == Piece::KING) {
-            rights &= ~(CastlingRight::Kingside(friendly) | CastlingRight::Queenside(friendly));
-        } else {
-            // Remove castling rights if rook moved from start square
-            if (move.piece == Piece::ROOK) {
-                if (move.from == kingsideRookSquare[friendly])
-                    rights &= ~CastlingRight::Kingside(friendly);
-                else if (move.from == queensideRookSquare[friendly])
-                    rights &= ~CastlingRight::Queenside(friendly);
-            }
-        }
-
-		// Remove castling rights if rook captured on start square
-		if (capture == Piece::ROOK) {
-			if (move.to == kingsideRookSquare[enemy])
-				rights &= ~CastlingRight::Kingside(enemy);
-			else if (move.to == queensideRookSquare[enemy])
-				rights &= ~CastlingRight::Queenside(enemy);
-		}
-    }
-
-    // Update en passant square if double pawn push
-	enPassantIndex = UINT8_MAX;
-    if (move.piece == Piece::PAWN && Difference(move.from, move.to) == 16) {
-        // Check if any of our pawns can en passant the opponent pawn that just double pushed
-        // This means that two identical positions (except for the en passant square) will hash to 
-        // the same value as long as there is no pawn to capture en passant.
-        // This check only accounts for pseudo-legal en passant captures but is better than nothing.
-        uint8_t enPassantIndex = move.to + enPassantOffset[friendly];
-        uint8_t file = enPassantIndex & 7;
-        uint64_t adjacentMask = 0;
-        if (file > 0) adjacentMask |= (1ull << (move.to - 1));
-        if (file < 7) adjacentMask |= (1ull << (move.to + 1));
-        if (adjacentMask & pieces.Occupancy(enemy, Piece::PAWN))
-            this->enPassantIndex = enPassantIndex;
-    }
-
-    // Update 50 move counter
-    if (Piece::IsValid(capture) || move.piece == Piece::PAWN)
-        fiftyMoveCounter = 0;
-    else
-        fiftyMoveCounter++;
-
-    turn = enemy;
-    halfMove++;
-
-    return moveData;
-}
-
-bool BoardState::WasLegalMove(const AttackTable& attackTable, MoveData moveData)
+bool BoardState::WasLegalMove(const AttackTable& attackTable, MoveData moveData) const
 {
     JUPITER_TRACE();
 
@@ -331,3 +264,42 @@ bool BoardState::WasLegalMove(const AttackTable& attackTable, MoveData moveData)
 
     return !targetAttacked;
 }
+
+// There's no avoiding checking against movegen results here.
+// That's slow so I defer that after some quick checks that must pass for a legal move, there are 
+// some extra heuristics that I can use here, but I don't think they're worth checking right now.
+bool BoardState::IsPseudoLegal(const AttackMoveBuffer& attacks, const QuietMoveBuffer& quiets, Move move) const
+{
+    JUPITER_TRACE();
+
+    // The move has to have correct bounds and legal pieces
+    if (!move.IsValid()) return false;
+
+    // The moving piece has to match the piece actually there
+    if (pieces.PieceInSquare(turn, move.from) != move.piece) return false;
+
+    // Cannot capture our own piece
+    Color::Value targetColor = pieces.PieceInSquare(move.to).first;
+    if (targetColor == turn) return false;
+
+    // Expensive checks, scanning through legal moves to find ours
+    if (targetColor == Color::Invalid()) return quiets.Contains(move);
+    return attacks.Contains(move);
+}
+
+bool BoardState::KingUnderAttack(const AttackTable& attackTable, Color::Value turn) const
+{
+    JUPITER_TRACE();
+
+    uint64_t kingBit = pieces.Occupancy(turn, Piece::KING);
+    return attackTable.SquareUnderAttack(std::forward<const BoardState>(*this), kingBit, Color::Opposite(turn));
+}
+
+bool BoardState::KingUnderAttack(const AttackTable& attackTable) const
+{
+    JUPITER_TRACE();
+
+    uint64_t kingBit = pieces.Occupancy(turn, Piece::KING);
+    return attackTable.SquareUnderAttack(std::forward<const BoardState>(*this), kingBit, Color::Opposite(turn));
+}
+

@@ -74,7 +74,7 @@ namespace libjupiter {
 
         Move move = Move::FromLAN(lan, m_State.pieces);
         if (!move.IsValid())
-            throw JupiterException(std::string("Malformed LAN string: ") + lan.chars);
+            throw JupiterException(std::string("Malformed LAN string: '") + lan.chars + "'");
 
         m_State.MakeMove(m_Zobrist, m_PieceSquareTables, move);
         m_History.Push(m_State);
@@ -119,7 +119,7 @@ namespace libjupiter {
 		return m_Searcher->Perft(m_State, depth);
 	}
 
-	uint64_t Board::PerftDivide(uint8_t depth, DivideBuffer& buffer)
+	uint64_t Board::PerftDivide(uint8_t depth, PerftBuffer& buffer)
 	{
 		JUPITER_TRACE();
 

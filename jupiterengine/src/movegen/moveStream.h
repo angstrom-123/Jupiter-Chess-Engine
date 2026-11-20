@@ -1,22 +1,22 @@
 #pragma once
 
-#ifndef __clang__ 
-    #define _Nullable 
-    #define _Nonnull
-#endif
-
 #include "movegen/move.h"
 #include "movegen/movegen.h"
 #include "board/boardState.h"
-#include "datastructure/buffer.h"
 #include "evaluation/evaluator.h"
 #include <cstdint>
+#include "datastructure/circularStack.h"
+
+#ifndef __clang__
+    #include "nullables.h"
+#endif
 
 // Not quite the theoretical maximums but I don't anticipate this becoming a problem
-const uint64_t MAX_PLY = 32;
+const uint8_t MAX_PLY = 32;
 const uint64_t MAX_KILLERS = 2;
 
-using KillerMoveBuffer = Buffer<Move, MAX_KILLERS>;
+using KillerMoveStack = CircularStack<Move, MAX_KILLERS>;
+using KillerMoveBuffer = CircularStack<Move, MAX_KILLERS>[MAX_PLY + 1]; // + 1 to store an empty stack to pass in if ply exceeds MAX_PLY
 using HistoryTable = uint16_t[64][64];
 
 struct StreamState {
@@ -36,44 +36,63 @@ public:
     // History table and killer moves are optional if you just want movegen but will segfault if streaming without
     MoveStream(
             const BoardState& state, 
-            const Movegen& movegen, 
-            const Evaluator *_Nullable eval = nullptr, 
-            const HistoryTable *_Nullable historyTable = nullptr, 
-            const KillerMoveBuffer *_Nullable killers = nullptr,
-            Move bestMove = Move::Invalid()
+            const AttackTable& attackTable,
+            const Evaluator& eval, 
+            const HistoryTable& historyTable, 
+            const KillerMoveStack& killers,
+            bool quiescenceMode
     ) 
         : 
+            m_QuiescenceMode{quiescenceMode},
             m_State{std::forward<const BoardState>(state)}, 
-            m_Movegen{std::forward<const Movegen>(movegen)},
             m_Eval{eval},
             m_HistoryTable{historyTable},
-            m_Killers{killers}, 
-            m_BestMove{bestMove} {}
+            m_Killers{KillerMoveStack(killers)} // Copy, should be ok since it is small (32 bytes for 2 killers)
+    {
+        movegen::FindAllAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), m_Attacks);
+        if (!quiescenceMode)
+            movegen::FindAllQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), m_Quiets);
+    }
 
-    Move Stream(bool attackMode = false);
+    const AttackMoveBuffer& GetAttacks() const { return m_Attacks; }
+    const QuietMoveBuffer& GetQuiets() const 
+    { 
+        // Be careful
+        if (m_QuiescenceMode) 
+            ERROR("Getting quiets from movestream when in quiescence mode"); 
+        return m_Quiets;
+    }
+    void SetTTMove(Move move) { m_BestMove = move; }
+    Move Stream();
     bool IsQuietMove() const { return m_LastWasQuiet; }
     bool IsBadAttack() const { return m_LastWasBadAttack; }
     bool IsFirstMove() const { return m_MoveCounter == 1; }
     uint8_t GetMoveCount() const { return m_MoveCounter; }
 
 private:
-    void OrderAttacks();
+    void ScoreAttacks();
+    Move PopOrderedAttack();
     void OrderQuiets();
 
 private:
     StreamState::Value m_StreamState{StreamState::NONE};
+
+    bool m_QuiescenceMode;
     const BoardState& m_State;
-    const Movegen &m_Movegen;
-    const Evaluator *_Nullable m_Eval{nullptr};
-    const HistoryTable *_Nullable m_HistoryTable{nullptr};
-    const KillerMoveBuffer *_Nullable m_Killers{nullptr};
-    Move m_BestMove{Move::Invalid()};;
+    const Evaluator& m_Eval;
+    const HistoryTable& m_HistoryTable;
+    KillerMoveStack m_Killers;
+
+    Move m_BestMove{Move::Invalid()};
+    Buffer<uint8_t, MAX_ATTACKS> m_AttackScores;
     AttackMoveBuffer m_Attacks;
     QuietMoveBuffer m_Quiets;
     AttackMoveBuffer m_BadAttacks;
-    std::size_t m_AttacksIndex{0};
-    std::size_t m_QuietsIndex{0};
-    std::size_t m_KillerIndex{0};
+
+    uint8_t m_AttacksIndex{0};
+    uint8_t m_QuietsIndex{0};
+    uint8_t m_KillerIndex{0};
+
     bool m_LastWasQuiet{false};
     bool m_LastWasBadAttack{false};
     uint8_t m_MoveCounter{0};

@@ -23,7 +23,7 @@ namespace libjupiter {
         void GetMetrics(std::string& result) const;
         void SetWeights(const EvaluatorConstants& weights);
 		uint64_t Perft(uint8_t depth);
-		uint64_t PerftDivide(uint8_t depth, DivideBuffer& buffer);
+		uint64_t PerftDivide(uint8_t depth, PerftBuffer& buffer);
         EvaluatorConstants GetWeights() const;
 
     private:

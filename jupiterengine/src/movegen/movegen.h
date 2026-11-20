@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cassert>
 #include <cstdint>
 #include "board/zobrist.h"
@@ -11,9 +13,10 @@ using PawnAttackFunction = void (*)(const BoardState&, AttackMoveBuffer&);
 using PawnQuietFunction = void (*)(const BoardState&, QuietMoveBuffer&);
 using PawnCountFunction = std::size_t (*)(const BoardState& state);
 
-class Pawngen {
-public:
-    template<Color::Value color> static void FindPawnAttacks(const BoardState& state, AttackMoveBuffer& attacks)
+// Pawns move funny so I generate their moves using bitshifts so they can all be done at once.
+// This is templated for moving color to avoid runtime checks.
+namespace pawngen {
+    template<Color::Value color> void FindPawnAttacks(const BoardState& state, AttackMoveBuffer& attacks)
     {
         JUPITER_TRACE();
 
@@ -32,13 +35,11 @@ public:
             Bitboard pawns = state.pieces.Occupancy(Color::WHITE, Piece::PAWN);
             captureLeft = ((pawns & ~A_FILE_MASK) >> 9) & targetBits;
             captureRight = ((pawns & ~H_FILE_MASK) >> 7)  & targetBits;
-        } else if constexpr (color == Color::BLACK)  {
+        } else {
             Bitboard targetBits = state.pieces.Occupancy(Color::WHITE) | enPassantBit;
             Bitboard pawns = state.pieces.Occupancy(Color::BLACK, Piece::PAWN);
             captureLeft = ((pawns & ~A_FILE_MASK) << 7) & targetBits;
             captureRight = ((pawns & ~H_FILE_MASK) << 9)  & targetBits;
-        } else {
-            std::unreachable();
         }
 
         Bitboard normalCaptureLeft = captureLeft & ~BACK_RANK_MASK;
@@ -80,7 +81,7 @@ public:
         }
     }
 
-    template<Color::Value color> static void FindPawnQuiets(const BoardState& state, QuietMoveBuffer& quiets)
+    template<Color::Value color> void FindPawnQuiets(const BoardState& state, QuietMoveBuffer& quiets)
     {
         JUPITER_TRACE();
 
@@ -117,10 +118,10 @@ public:
         while (singlePromote) {
             uint8_t index = std::countr_zero(singlePromote);
             uint8_t from = index + singleOffset;
-            quiets.EmplaceBack(from, index, Piece::PAWN, Piece::KNIGHT);
-            quiets.EmplaceBack(from, index, Piece::PAWN, Piece::BISHOP);
-            quiets.EmplaceBack(from, index, Piece::PAWN, Piece::ROOK);
             quiets.EmplaceBack(from, index, Piece::PAWN, Piece::QUEEN);
+            quiets.EmplaceBack(from, index, Piece::PAWN, Piece::ROOK);
+            quiets.EmplaceBack(from, index, Piece::PAWN, Piece::BISHOP);
+            quiets.EmplaceBack(from, index, Piece::PAWN, Piece::KNIGHT);
             singlePromote &= (singlePromote - 1);
         }
 
@@ -133,7 +134,7 @@ public:
         }
     }
 
-    template<Color::Value color> static std::size_t CountPawnAttacks(const BoardState& state)
+    template<Color::Value color> std::size_t CountPawnAttacks(const BoardState& state)
     {
         JUPITER_TRACE();
 
@@ -165,13 +166,13 @@ public:
         return captureCount;
     }
 
-    template<Color::Value color> static std::size_t CountPawnQuiets(const BoardState& state)
+    template<Color::Value color> std::size_t CountPawnQuiets(const BoardState& state)
     {
         JUPITER_TRACE();
 
         Bitboard BACK_RANK_MASK = 0b11111111'00000000'00000000'00000000'00000000'00000000'00000000'11111111;
-        Bitboard RANK_3_MASK = 0b00000000'00000000'00000000'00000000'00000000'11111111'00000000'00000000;
-        Bitboard RANK_6_MASK = 0b00000000'00000000'11111111'00000000'00000000'00000000'00000000'00000000;
+        Bitboard RANK_3_MASK = 0b00000000'00000000'11111111'00000000'00000000'00000000'00000000'00000000;
+        Bitboard RANK_6_MASK = 0b00000000'00000000'00000000'00000000'00000000'11111111'00000000'00000000;
 
         Bitboard pawns = state.pieces.Occupancy(color, Piece::PAWN);
         Bitboard occupancy = state.pieces.Occupancy();
@@ -194,63 +195,55 @@ public:
         return moveCount;
     }
 
-public:
-    static constexpr PawnAttackFunction attackFunctions[2] = {
-        &Pawngen::FindPawnAttacks<Color::WHITE>,
-        &Pawngen::FindPawnAttacks<Color::BLACK>
+    constexpr PawnAttackFunction attackFunctions[2] = {
+        &FindPawnAttacks<Color::WHITE>,
+        &FindPawnAttacks<Color::BLACK>
     };
-    static constexpr PawnQuietFunction quietFunctions[2] = {
-        &Pawngen::FindPawnQuiets<Color::WHITE>,
-        &Pawngen::FindPawnQuiets<Color::BLACK>
+    constexpr PawnQuietFunction quietFunctions[2] = {
+        &FindPawnQuiets<Color::WHITE>,
+        &FindPawnQuiets<Color::BLACK>
     };
-    static constexpr PawnCountFunction attackCountFunctions[2] = {
-        &Pawngen::CountPawnAttacks<Color::WHITE>,
-        &Pawngen::CountPawnAttacks<Color::BLACK>
+    constexpr PawnCountFunction attackCountFunctions[2] = {
+        &CountPawnAttacks<Color::WHITE>,
+        &CountPawnAttacks<Color::BLACK>
     };
-    static constexpr PawnCountFunction quietCountFunctions[2] = {
-        &Pawngen::CountPawnQuiets<Color::WHITE>,
-        &Pawngen::CountPawnQuiets<Color::BLACK>
+    constexpr PawnCountFunction quietCountFunctions[2] = {
+        &CountPawnQuiets<Color::WHITE>,
+        &CountPawnQuiets<Color::BLACK>
     };
 };
 
-class Movegen {
-public:
-    Movegen(const BoardState& state, const AttackTable& attackTable)
-        : m_State{std::forward<const BoardState>(state)}, m_AttackTable{std::forward<const AttackTable>(attackTable)} {}
+namespace movegen {
+    void FindAllAttacks(const BoardState& state, const AttackTable& attackTable, AttackMoveBuffer& attacks);
+    void FindAllPawnAttacks(const BoardState& state, Color::Value color, AttackMoveBuffer& attacks);
+    void FindKnightAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index, AttackMoveBuffer& attacks);
+    void FindKingAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index, AttackMoveBuffer& attacks);
+    void FindBishopAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index, AttackMoveBuffer& attacks);
+    void FindRookAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index, AttackMoveBuffer& attacks);
+    void FindQueenAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index, AttackMoveBuffer& attacks);
+    void FindSliderAttacks(uint8_t index, Piece::Value piece, Bitboard attackBits, AttackMoveBuffer& attacks);
 
-    void FindAllAttacks(AttackMoveBuffer& attacks) const;
-    void FindAllQuiets(QuietMoveBuffer& quiets) const;
-    void FindAllPawnAttacks(Color::Value color, AttackMoveBuffer& attacks) const;
-    void FindAllPawnQuiets(Color::Value color, QuietMoveBuffer& quiets) const;
-    void FindKnightAttacks(uint8_t index, AttackMoveBuffer& attacks) const;
-    void FindKnightQuiets(uint8_t index, QuietMoveBuffer& quiets) const;
-    void FindKingAttacks(uint8_t index, AttackMoveBuffer& attacks) const;
-    void FindKingQuiets(uint8_t index, QuietMoveBuffer& quiets) const;
-    void FindBishopAttacks(uint8_t index, AttackMoveBuffer& attacks) const;
-    void FindBishopQuiets(uint8_t index, QuietMoveBuffer& quiets) const;
-    void FindRookAttacks(uint8_t index, AttackMoveBuffer& attacks) const;
-    void FindRookQuiets(uint8_t index, QuietMoveBuffer& quiets) const;
-    void FindQueenAttacks(uint8_t index, AttackMoveBuffer& attacks) const;
-    void FindQueenQuiets(uint8_t index, QuietMoveBuffer& quiets) const;
-    void FindSliderAttacks(uint8_t index, Piece::Value piece, Bitboard attackBits, AttackMoveBuffer& attacks) const;
-    void FindSliderQuiets(uint8_t index, Piece::Value piece, Bitboard attackBits, QuietMoveBuffer& quiets) const;
+    void FindAllQuiets(const BoardState& state, const AttackTable& attackTable, QuietMoveBuffer& quiets);
+    void FindAllPawnQuiets(const BoardState& state, Color::Value color, QuietMoveBuffer& quiets);
+    void FindKnightQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index, QuietMoveBuffer& quiets);
+    void FindKingQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index, QuietMoveBuffer& quiets);
+    void FindBishopQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index, QuietMoveBuffer& quiets);
+    void FindRookQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index, QuietMoveBuffer& quiets);
+    void FindQueenQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index, QuietMoveBuffer& quiets);
+    void FindSliderQuiets(uint8_t index, Piece::Value piece, Bitboard attackBits, QuietMoveBuffer& quiets);
 
-    [[nodiscard]] std::size_t CountAllAttacks() const;
-    [[nodiscard]] std::size_t CountAllQuiets() const;
-    [[nodiscard]] std::size_t CountAllPawnAttacks(Color::Value color) const;
-    [[nodiscard]] std::size_t CountAllPawnQuiets(Color::Value color) const;
-    [[nodiscard]] std::size_t CountKnightAttacks(uint8_t index) const;
-    [[nodiscard]] std::size_t CountKnightQuiets(uint8_t index) const;
-    [[nodiscard]] std::size_t CountBishopAttacks(uint8_t index) const;
-    [[nodiscard]] std::size_t CountBishopQuiets(uint8_t index) const;
-    [[nodiscard]] std::size_t CountRookAttacks(uint8_t index) const;
-    [[nodiscard]] std::size_t CountRookQuiets(uint8_t index) const;
-    [[nodiscard]] std::size_t CountQueenAttacks(uint8_t index) const;
-    [[nodiscard]] std::size_t CountQueenQuiets(uint8_t index) const;
-    [[nodiscard]] std::size_t CountKingAttacks(uint8_t index) const;
-    [[nodiscard]] std::size_t CountKingQuiets(uint8_t index) const;
-
-private:
-    const BoardState& m_State;
-    const AttackTable& m_AttackTable;
+    std::size_t CountAllAttacks(const BoardState& state, const AttackTable& attackTable);
+    std::size_t CountAllQuiets(const BoardState& state, const AttackTable& attackTable);
+    std::size_t CountAllPawnAttacks(const BoardState& state, Color::Value color);
+    std::size_t CountAllPawnQuiets(const BoardState& state, Color::Value color);
+    std::size_t CountKnightAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountKnightQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountBishopAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountBishopQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountRookAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountRookQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountQueenAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountQueenQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountKingAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index);
+    std::size_t CountKingQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index);
 };

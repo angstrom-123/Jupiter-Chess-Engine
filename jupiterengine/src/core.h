@@ -3,14 +3,7 @@
 #include "datastructure/buffer.h"
 #include <cstdint>
 #include <cstdlib>
-
-#ifdef _MSC_VER 
-    #define INLINE __forceinline
-#elif defined(__GNUC__) || defined(__clang__)
-    #define INLINE inline __attribute__((always_inline))
-#else 
-    #define INLINE inline
-#endif
+#include "inlines.h"
 
 INLINE uint8_t ToIndex(uint8_t x, uint8_t y) { return x + 8 * y; }
 INLINE uint8_t Difference(uint8_t a, uint8_t b) { return (a > b) ? a - b : b - a; }
@@ -24,7 +17,7 @@ struct Color {
 
     static constexpr Buffer<Color::Value, Color::MAX_ENUM> values{Color::WHITE, Color::BLACK};
 
-    INLINE static Value Invalid() { return Value::MAX_ENUM; }
+    INLINE static constexpr Value Invalid() { return Value::MAX_ENUM; }
     INLINE static bool IsValid(Value color) { return color < Value::MAX_ENUM; }
     INLINE static Value Opposite(Value color) 
     { 
@@ -53,13 +46,13 @@ struct Piece {
 
     static constexpr Buffer<Piece::Value, Piece::MAX_ENUM> values{Piece::PAWN, Piece::KNIGHT, Piece::BISHOP, Piece::ROOK, Piece::QUEEN, Piece::KING};
 
-    INLINE static Value Invalid() { return Value::MAX_ENUM; }
+    INLINE static constexpr Value Invalid() { return Value::MAX_ENUM; }
     INLINE static bool IsValid(Value value) { return value < Value::MAX_ENUM; }
-    static const char *Show(Value value) { return m_Names[value]; }
+    static const char *Show(Value value) { return (value <= Piece::MAX_ENUM) ? m_Names[value] : "OOB"; }
     INLINE static int32_t Evaluate(Value value) { return m_Evals[value]; }
 
 private:
-    static constexpr int32_t m_Evals[Piece::MAX_ENUM] = { 100, 300, 310, 500, 975, 0 };
+    static constexpr int32_t m_Evals[Piece::MAX_ENUM] = { 100, 300, 310, 500, 1000, 0 };
     static constexpr const char *m_Names[Piece::MAX_ENUM + 1] = { "Pawn", "Knight", "Bishop", "Rook", "Queen", "King", "None" };
 };
 INLINE Piece::Value operator++(Piece::Value& value, int)

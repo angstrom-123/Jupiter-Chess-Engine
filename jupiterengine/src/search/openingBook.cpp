@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include "core.h"
+#include "util/exception.h"
 #include "util/instrumenter.h"
 
 namespace fs = std::filesystem;
@@ -12,6 +13,8 @@ namespace fs = std::filesystem;
 const uint64_t POLYGLOT_ENTRY_SIZE = 16;
 const fs::path BOOK_FILE_PATH = fs::path(__FILE__).parent_path().parent_path().parent_path() / "assets" / "8_moves_v3_book.bin";
 
+// Randoms for generating zobrist hashes used by the polyglot opening book format
+// These are fixed by the standard and are different to the ones I use.
 const uint64_t randoms[781] = {
     0x9D39247E33776D41, 0x2AF7398005AAA5C7, 0x44DB015024623547, 0x9C15F73E62A76AE2,
     0x75834465489C0C89, 0x3290AC3A203001BF, 0x0FBBAD1F61042279, 0xE83A908FF2FB60CA,
@@ -231,8 +234,10 @@ OpeningBook::OpeningBook()
 
     // Read in polyglot file
     std::ifstream file(BOOK_FILE_PATH, std::ios::in | std::ios::binary | std::ios::ate);
+    if (!file.is_open())
+        throw JupiterException("Failed to open opening book file");
+
     m_FileSizeBytes = file.tellg();
-    INFO("size: " << m_FileSizeBytes);
     file.seekg(0, std::ios::beg);
     m_Bytes.resize(m_FileSizeBytes);
     file.read(reinterpret_cast<char *>(m_Bytes.data()), m_FileSizeBytes);
@@ -254,9 +259,9 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves) cons
 {
     JUPITER_TRACE();
 
-    // Binary search (Polyglot orders keys ascending)
     ZobristKey targetKey = ZobristHash(std::forward<const BoardState>(state));
 
+    // Binary search (Polyglot orders keys ascending)
     uint64_t low = 0;
     uint64_t high = m_FileSizeBytes / POLYGLOT_ENTRY_SIZE;
     uint64_t found = UINT64_MAX;
@@ -324,12 +329,7 @@ std::pair<Move, uint16_t> OpeningBook::ParseMove(const BoardState& state, uint64
     // Polyglot's board is verticaly flipped compared to mine
     uint8_t fromIndex = ToIndex(fromFile, 7 - fromRow);
     uint8_t toIndex = ToIndex(toFile, 7 - toRow);
-    Move move = {
-        .from = fromIndex,
-        .to = toIndex,
-        .piece = state.pieces.PieceInSquare(state.turn, fromIndex),
-        .promote = mapping[promote],
-    };
+    Move move(fromIndex, toIndex, state.pieces.PieceInSquare(state.turn, fromIndex), mapping[promote]);
 
     // Polyglot stores castling as king moving to rook but I store it as king moving 2 squares
     if (move.piece == Piece::KING) {

@@ -134,10 +134,7 @@ uint64_t Zobrist::ValueForEnPassant(uint8_t enPassantIndex) const
     return m_Randoms[enPassantOffset + file];
 }
 
-uint64_t Zobrist::ValueForTurn(Color::Value turn) const
+uint64_t Zobrist::ValueForTurn() const
 {
-    if (turn == Color::BLACK)
-        return m_Randoms[ZOBRIST_NUMBER_COUNT - 1];
-
-    return 0;
+    return m_Randoms[ZOBRIST_NUMBER_COUNT - 1];
 }

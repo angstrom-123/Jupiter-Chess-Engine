@@ -142,12 +142,11 @@ int32_t Evaluator::KingMobility(const BoardState& state, const PositionData& dat
     if (data.phase > MAX_PHASE)
         return 0;
     
-    Movegen movegen(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
     uint8_t kingIndex = data.kingIndices[state.turn];
 
     // Imagine a friendly queen where the king is and see how much it can move
     AttackMoveBuffer attacks;
-    movegen.FindQueenAttacks(kingIndex, attacks);
+    movegen::FindQueenAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable), kingIndex, attacks);
 
     // Penalize excessive mobility (more than 3 squares)
     if (attacks.Size() > 3)
@@ -162,8 +161,9 @@ int32_t Evaluator::Mobility(const BoardState& state, const PositionData& data) c
 
     (void) data;
 
-    Movegen movegen(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
-    return (movegen.CountAllAttacks() + movegen.CountAllQuiets()) * m_Constants.mobilityFactor;
+    std::size_t nAttacks = movegen::CountAllAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
+    std::size_t nQuiets = movegen::CountAllQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
+    return (nAttacks + nQuiets) * m_Constants.mobilityFactor;
 }
 
 int32_t Evaluator::KingPawnTropism(const BoardState& state, const PositionData& data) const 
@@ -255,17 +255,16 @@ int32_t Evaluator::PawnStorm(const BoardState& state, const PositionData& data) 
     
     int32_t stormEval = 0;
 
-    // Count average distance to opponent pawns in current and adjacent files
-    uint8_t distance = 23; // 8 + 7 + 8
+    // Count average distance to opponent pawns in current and adjacent files (further is better)
+    uint8_t proximity = 23; // 8 + 7 + 8
     uint8_t rank0 = opp.furthest.Rank(kingFile);
     uint8_t rank1 = (kingFile > 0) ? opp.furthest.Rank(kingFile - 1) : UINT8_MAX;
     uint8_t rank2 = (kingFile < 7) ? opp.furthest.Rank(kingFile + 1) : UINT8_MAX;
 
-    if (rank0 < UINT8_MAX) distance -= m_DistanceTable.Manhattan(kingIndex, rank0);
-    if (rank1 < UINT8_MAX) distance -= m_DistanceTable.Manhattan(kingIndex, rank1);
-    if (rank2 < UINT8_MAX) distance -= m_DistanceTable.Manhattan(kingIndex, rank2);
+    if (rank0 < UINT8_MAX) proximity -= m_DistanceTable.Manhattan(kingIndex, ToIndex(kingFile, rank0));
+    if (rank1 < UINT8_MAX) proximity -= m_DistanceTable.Manhattan(kingIndex, ToIndex(kingFile - 1, rank1));
+    if (rank2 < UINT8_MAX) proximity -= m_DistanceTable.Manhattan(kingIndex, ToIndex(kingFile + 1, rank2));
 
-    uint8_t proximity = 23 - distance;
     stormEval += proximity * m_Constants.stormingPawnFactor;
 
     return stormEval * (MAX_PHASE - data.phase);
@@ -473,8 +472,6 @@ void Evaluator::ComputePawnStructure(const BoardState& state, PositionData& data
     PawnStructure& ps = data.pawns;
 
     const Bitboard FILE_MASK = 0b00000001'00000001'00000001'00000001'00000001'00000001'00000001'00000001;
-
-    // TODO: Convert most of this to use the mask table (m_MaskTable)
 
     // Open files
     {

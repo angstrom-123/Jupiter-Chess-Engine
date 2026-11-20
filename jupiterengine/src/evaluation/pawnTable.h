@@ -49,8 +49,8 @@ struct PTEntry {
     PTEntry() = default;
     PTEntry(ZobristKey hash, int32_t score, PawnStructure& structure)
         : hash{hash}, score{score}, structure{structure} {}
-    static PTEntry Invalid() { return PTEntry{}; }
-    bool IsValid() const { return hash > 0; }
+    INLINE static constexpr PTEntry Invalid() { return PTEntry{}; }
+    INLINE bool IsValid() const { return hash > 0; }
 };
 
 class PawnTable {
