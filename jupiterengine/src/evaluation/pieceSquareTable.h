@@ -1,12 +1,16 @@
 #pragma once
 
 #include "core.h"
+#include "util/instrumenter.h"
+#include "util/log.h"
+#include <csignal>
 #include <cstdint>
 
 struct PSTScore {
     int16_t midgame{0};
     int16_t endgame{0};
 
+    PSTScore() = default;
     PSTScore(int16_t midgame, int16_t endgame)
         : midgame{midgame}, endgame{endgame} {}
 
@@ -30,16 +34,21 @@ struct PSTScore {
     }
 };
 
-struct PieceSquareTable {
-    int64_t midgameTable[64];
-    int64_t endgameTable[64];
-};
-
 class PieceSquareTables {
 public:
-    PieceSquareTables();
-    [[nodiscard]] PSTScore Get(Color::Value color, Piece::Value piece, uint8_t index) const;
+    PieceSquareTables(); // NOTE: construction is a bit expensive but we only do it once
+
+    INLINE PSTScore Get(Color::Value color, Piece::Value piece, uint8_t index) const 
+    {
+        JUPITER_TRACE();
+
+        // Invert table and score if black
+        if (color == Color::BLACK)
+            return -m_Tables[piece][index ^ 56];
+
+        return m_Tables[piece][index];
+    }
 
 private:
-    PieceSquareTable m_Tables[Piece::MAX_ENUM];
+    PSTScore m_Tables[Piece::MAX_ENUM][64];
 };

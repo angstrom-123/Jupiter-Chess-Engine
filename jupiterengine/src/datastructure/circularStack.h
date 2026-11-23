@@ -5,15 +5,22 @@
 #include <cstdlib>
 #include <cstring>
 #include <utility>
-#include "inlines.h"
+#include "util/inlines.h"
 
 template<typename T, std::size_t capacity> class CircularStack {
 public:
-    CircularStack() = default;
-    CircularStack(const CircularStack<T, capacity>& other)
-        : m_Size{other.Size()}, m_Top{other.TopIndex()}, m_Bottom{other.BottomIndex()}
+    CircularStack() noexcept = default;
+    CircularStack(const CircularStack<T, capacity>& other) noexcept
+        : m_Size{other.m_Size}, m_Top{other.m_Top}, m_Bottom{other.m_Bottom}
     {
-        std::memcpy(m_Data, other.Data(), capacity * sizeof(T));
+        std::memcpy(m_Data, other.m_Data, capacity * sizeof(T));
+    }
+    void operator=(const CircularStack<T, capacity>& other) noexcept
+    {
+        m_Size = other.m_Size;
+        m_Top = other.m_Top;
+        m_Bottom = other.m_Bottom;
+        std::memcpy(m_Data, other.m_Data, capacity * sizeof(T));
     }
     void Push(T&& value)
     {
@@ -84,14 +91,6 @@ public:
     INLINE const T * const Data() const
     {
         return m_Data;
-    }
-    INLINE std::size_t TopIndex() const
-    {
-        return m_Top;
-    }
-    INLINE std::size_t BottomIndex() const
-    {
-        return m_Bottom;
     }
 
 private:

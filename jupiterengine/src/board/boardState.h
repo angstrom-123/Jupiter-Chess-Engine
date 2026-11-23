@@ -5,10 +5,6 @@
 #include "evaluation/pieceSquareTable.h"
 #include "movegen/move.h"
 
-#ifndef __clang__ 
-    #include "nullables.h"
-#endif
-
 class BoardState {
 public:
     BitboardSet pieces;

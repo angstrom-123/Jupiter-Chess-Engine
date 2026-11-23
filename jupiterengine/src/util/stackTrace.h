@@ -22,12 +22,12 @@ struct CallStack {
     ~CallStack();
 };
 
-constexpr std::size_t MAX_THREADS = 128;
-static std::atomic<CallStack *> g_CallStackRegistry[MAX_THREADS]{};
+constexpr std::size_t MAX_TRACED_THREADS = 128;
+static std::atomic<CallStack *> g_CallStackRegistry[MAX_TRACED_THREADS]{};
 
 INLINE CallStack::CallStack()
 {
-    for (std::size_t i = 0; i < MAX_THREADS; i++) {
+    for (std::size_t i = 0; i < MAX_TRACED_THREADS; i++) {
         CallStack *stack = nullptr;
         if (g_CallStackRegistry[i].compare_exchange_strong(stack, this)) {
             index = i;
@@ -74,7 +74,7 @@ public:
 
     static void PrintAllTraces()
     {
-        for (std::size_t i = 0; i < MAX_THREADS; i++) {
+        for (std::size_t i = 0; i < MAX_TRACED_THREADS; i++) {
             WARN("\n\n=== C++ Stack Trace (thread " << i << ") ===\n");
 
             CallStack *stack = g_CallStackRegistry[i].load(std::memory_order_acquire);

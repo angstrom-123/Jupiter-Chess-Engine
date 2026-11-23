@@ -14,7 +14,7 @@ Zobrist::Zobrist()
     RomuQuadRandom rng(seed);
     rng.Warm();
 
-    for (uint64_t i = 0; i < ZOBRIST_NUMBER_COUNT; i++)
+    for (uint64_t i = 0; i < N_ZOBRIST_NUMBERS; i++)
         m_Randoms[i] = rng.Generate();
 }
 
@@ -100,41 +100,3 @@ ZobristKey Zobrist::ComputePawnKey(const BoardState& state) const
     return key;
 }
 
-uint64_t Zobrist::ValueForPiece(Color::Value color, Piece::Value piece, uint8_t index) const
-{
-    uint64_t colorOffset = color * (Piece::MAX_ENUM * 64);
-    uint64_t pieceOffset = piece * 64;
-    uint64_t indexOffset = index;
-    return m_Randoms[colorOffset + pieceOffset + indexOffset];
-}
-
-uint64_t Zobrist::ValueForRights(CastlingRights rights) const
-{
-    constexpr uint64_t rightsOffset = 2 * (Piece::MAX_ENUM * 64);
-    uint64_t value = 0;
-    if (rights & CastlingRight::KINGSIDE_WHITE)
-        value ^= m_Randoms[rightsOffset];
-    if (rights & CastlingRight::QUEENSIDE_WHITE)
-        value ^= m_Randoms[rightsOffset + 1];
-    if (rights & CastlingRight::KINGSIDE_BLACK)
-        value ^= m_Randoms[rightsOffset + 2];
-    if (rights & CastlingRight::QUEENSIDE_BLACK)
-        value ^= m_Randoms[rightsOffset + 3];
-    return value;
-}
-
-uint64_t Zobrist::ValueForEnPassant(uint8_t enPassantIndex) const
-{
-    constexpr uint64_t enPassantOffset = 2 * (Piece::MAX_ENUM * 64) + 4;
-
-    if (enPassantIndex == UINT8_MAX)
-        return 0;
-
-    uint8_t file = enPassantIndex & 7;
-    return m_Randoms[enPassantOffset + file];
-}
-
-uint64_t Zobrist::ValueForTurn() const
-{
-    return m_Randoms[ZOBRIST_NUMBER_COUNT - 1];
-}

@@ -8,6 +8,7 @@
 #include "movegen/move.h"
 #include "movegen/attackTable.h"
 #include "movegen/moveStream.h"
+#include "search/window.h"
 #include "util/executionTimer.h"
 #include "util/rng.h"
 #include "search/openingBook.h"
@@ -18,31 +19,6 @@ using PerftBuffer = Buffer<std::pair<Move, uint64_t>, MAX_ATTACKS + MAX_QUIETS>;
 
 constexpr uint16_t PLY_UNIT = 64;
 constexpr uint16_t HALF_PLY_UNIT = PLY_UNIT / 2;
-
-struct AlphaBeta {
-    int32_t alpha{-INFINITY_EVAL};
-    int32_t beta{INFINITY_EVAL};
-
-    AlphaBeta() = default;
-    AlphaBeta(int32_t alpha, int32_t beta)
-        : alpha{alpha}, beta{beta} {}
-
-    INLINE AlphaBeta operator-() const { return AlphaBeta(-beta, -alpha); }
-    INLINE AlphaBeta Null() const { return AlphaBeta(-alpha - 1, -alpha); }
-    INLINE bool Contains(int32_t score) const { return score > alpha && score < beta; }
-    INLINE bool IsBetaCutoff() const { return alpha >= beta; }
-    INLINE void Update(Cutoff::Value cutoff, int32_t score)
-    {
-        // NOTE: This seems like it's flipped, but this is actually correct.
-        //       If a beta cutoff occurred, then the score is a lower bound on 
-        //       the true score for that node. Since it is a lower bound, it 
-        //       should raise alpha. And vice versa for lowering beta. 
-        if (cutoff == Cutoff::BETA)
-            alpha = std::max(alpha, score);
-        else if (cutoff == Cutoff::ALPHA)
-            beta = std::min(beta, score);
-    }
-};
 
 class Searcher {
 public:
@@ -66,6 +42,8 @@ private:
     int32_t Quiesce(BoardState& state, History& history, AlphaBeta window, uint8_t ply);
     int32_t PrincipalVariationSearch(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, int16_t depthUnits, uint8_t nextPly);
     int32_t PrincipalVariationQuiesce(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, uint8_t nextPly);
+    void UpdateHistory(const BoardState& state, Move move, uint8_t depth);
+    void UpdateKillers(Move move, uint8_t ply);
     void Reset();
 
 private:
@@ -99,7 +77,7 @@ private:
     const PieceSquareTables &m_PieceSquareTables;
     Evaluator m_Eval{Evaluator(m_AttackTable)};
 
-    // These should be associated with each "node"
+    // Should these be associated with each "node"?
     //  - Will we need a set of these per split point as they are used for move ordering?
     //  - I should look into how these are handled, maybe I will disable these for the initial impl
     KillerMoveBuffer m_Killers{};

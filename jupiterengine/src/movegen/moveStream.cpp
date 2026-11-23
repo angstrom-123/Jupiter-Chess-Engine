@@ -1,19 +1,29 @@
 #include "moveStream.h"
 #include "core.h"
+#include "movegen/movegen.h"
 #include "util/instrumenter.h"
 #include <algorithm>
 
-Move MoveStream::Stream()
+void MoveStream::Init(const BoardState& state, const AttackTable& attackTable, const KillerMoveStack& killers, bool quiescenceMode)
 {
-    m_LastWasQuiet = false;
-    m_LastWasBadAttack = false;
+    m_Flags = quiescenceMode ? StreamFlag::QUIESCENCE : StreamFlag::NONE;
+    m_Killers = killers;
+
+    movegen::FindAllAttacks(state, attackTable, m_Attacks);
+    if (!quiescenceMode)
+        movegen::FindAllQuiets(state, attackTable, m_Quiets);
+}
+
+Move MoveStream::Stream(const BoardState& state, const Evaluator& eval, const HistoryTable& historyTable)
+{
+    m_Flags ^= StreamFlag::LAST_WAS_QUIET | StreamFlag::LAST_WAS_BAD_ATTACK;
 
     switch (m_StreamState) {
         case StreamState::NONE:
         {
             JUPITER_TRACE();
 
-            ScoreAttacks();
+            ScoreAttacks(state);
             m_StreamState = StreamState::GOOD_ATTACKS;
 
             // Only return the best move if pseudolegal
@@ -31,16 +41,18 @@ Move MoveStream::Stream()
             Move move;
             while ((move = PopOrderedAttack()).IsValid()) {
                 if (move != m_BestMove) {
-                    if (m_Eval.SEE(std::forward<const BoardState>(m_State), move) > 0) {
+                    if (eval.SEE(state, move) > 0) {
                         m_MoveCounter++;
                         return move;
                     } else {
-                        m_BadAttacks.PushBack(move);
+                        // Overwrite the start of the buffer with the bad moves so that I can avoid 
+                        // having a separate buffer just for the bad moves. This saves some bytes.
+                        m_Attacks[m_BadAttacksIndex++] = move;
                     }
                 }
             }
 
-            if (m_QuiescenceMode) {
+            if (m_Flags & StreamFlag::QUIESCENCE) {
                 m_StreamState = StreamState::FINISHED;
                 return Move::Invalid();
             } else {
@@ -53,18 +65,19 @@ Move MoveStream::Stream()
         {
             JUPITER_TRACE();
 
-            while (m_KillerIndex < m_Killers.Size()) {
-                const Move move = m_Killers.Peek(m_KillerIndex++);
+            while (m_QuietsIndex < m_Killers.Size()) {
+                const Move move = m_Killers.Peek(m_QuietsIndex++);
 
-                if (m_State.IsPseudoLegal(GetAttacks(), GetQuiets(), move)) {
+                if (state.IsPseudoLegal(GetAttacks(), GetQuiets(), move)) {
                     // Don't set quiet move flag because killers are special cases
                     m_MoveCounter++;
                     return move;
                 }
             }
 
-            OrderQuiets();
+            OrderQuiets(historyTable, state.turn);
             m_StreamState = StreamState::QUIETS;
+            m_QuietsIndex = 0;
 
             // Fall through
         }
@@ -75,7 +88,7 @@ Move MoveStream::Stream()
             while (m_QuietsIndex < m_Quiets.Size()) {
                 Move move = m_Quiets[m_QuietsIndex++];
                 if (move != m_BestMove && !m_Killers.Contains(move)) {
-                    m_LastWasQuiet = true;
+                    m_Flags |= StreamFlag::LAST_WAS_QUIET;
                     m_MoveCounter++;
                     return move;
                 }
@@ -90,10 +103,10 @@ Move MoveStream::Stream()
         {
             JUPITER_TRACE();
 
-            while (m_AttacksIndex < m_BadAttacks.Size()) {
-                const Move move = m_BadAttacks[m_AttacksIndex++];
+            while (m_AttacksIndex < m_BadAttacksIndex) {
+                const Move move = m_Attacks[m_AttacksIndex++];
                 if (move != m_BestMove) {
-                    m_LastWasBadAttack = true;
+                    m_Flags |= StreamFlag::LAST_WAS_BAD_ATTACK;
                     m_MoveCounter++;
                     return move;
                 }
@@ -123,16 +136,16 @@ static const uint8_t MVV_LVA_TABLE[Piece::MAX_ENUM + 1][Piece::MAX_ENUM + 1] = {
 };
 static const uint8_t MVV_LVA_MAX = 55;
 
-void MoveStream::ScoreAttacks()
+void MoveStream::ScoreAttacks(const BoardState& state)
 {
     JUPITER_TRACE();
 
-    Color::Value enemy = Color::Opposite(m_State.turn);
+    Color::Value enemy = Color::Opposite(state.turn);
     for (const Move move : m_Attacks) {
-        Piece::Value victim = m_State.pieces.PieceInSquare(enemy, move.to);
+        Piece::Value victim = state.pieces.PieceInSquare(enemy, move.to);
         if (!Piece::IsValid(victim)) // In case of en passant
             victim = Piece::PAWN;
-        Piece::Value aggressor = m_State.pieces.PieceInSquare(m_State.turn, move.from);
+        Piece::Value aggressor = state.pieces.PieceInSquare(state.turn, move.from);
         m_AttackScores.PushBack(MVV_LVA_TABLE[victim][aggressor]);
     }
 }
@@ -174,7 +187,7 @@ Move MoveStream::PopOrderedAttack()
     return best;
 }
 
-void MoveStream::OrderQuiets()
+void MoveStream::OrderQuiets(const HistoryTable& historyTable, Color::Value turn)
 {
     JUPITER_TRACE();
 
@@ -182,8 +195,8 @@ void MoveStream::OrderQuiets()
     if (m_Quiets.Size() <= 4)
         return;
 
-    std::sort(m_Quiets.begin(), m_Quiets.end(), [this](const Move& a, const Move& b) {
+    std::sort(m_Quiets.begin(), m_Quiets.end(), [&historyTable, turn](const Move a, const Move b) {
         // History heuristic
-        return m_HistoryTable[a.from][a.to] > m_HistoryTable[b.from][b.to];
+        return historyTable[turn][a.from][a.to] > historyTable[turn][b.from][b.to];
     });
 }

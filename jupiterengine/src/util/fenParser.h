@@ -1,10 +1,8 @@
 #pragma once 
 
 #include "board/boardState.h"
-
-#ifndef __clang__ 
-    #define _Nullable 
-    #define _Nonnull
+#ifndef __clang__
+    #include "util/nullables.h"
 #endif
 
 namespace fen {

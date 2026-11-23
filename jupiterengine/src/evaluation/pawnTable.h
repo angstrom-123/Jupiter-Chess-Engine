@@ -33,12 +33,10 @@ struct PawnRanks {
 };
 
 struct PawnStructure {
-    struct Relative {
-        Bitboard weak{0};         // King pawn tropism
-        Bitboard passed{0};       // King pawn tropism
-        PawnRanks furthest{};     // Pawn shield / storm
-    } relative[Color::MAX_ENUM];
-    Bitboard openFiles{0};        // Rook / Queen bonus
+    Bitboard weak[Color::MAX_ENUM];         // King pawn tropism
+    Bitboard passed[Color::MAX_ENUM];       // King pawn tropism
+    PawnRanks furthest[Color::MAX_ENUM];    // Pawn shield / storm
+    Bitboard openFiles{0};                  // Rook / Queen bonus
 };
 
 struct PTEntry {
@@ -47,7 +45,7 @@ struct PTEntry {
     PawnStructure structure{PawnStructure{}};
 
     PTEntry() = default;
-    PTEntry(ZobristKey hash, int32_t score, PawnStructure& structure)
+    PTEntry(ZobristKey hash, int32_t score, const PawnStructure& structure) // This copies the pawn structure, but I think it has to
         : hash{hash}, score{score}, structure{structure} {}
     INLINE static constexpr PTEntry Invalid() { return PTEntry{}; }
     INLINE bool IsValid() const { return hash > 0; }
@@ -59,7 +57,7 @@ public:
     ~PawnTable();
     std::size_t OccupancyBytes() const { return m_Occupancy * sizeof(PTEntry); }
     PTEntry Get(ZobristKey pawnKey) const;
-    void Save(ZobristKey pawnKey, int32_t score, PawnStructure& structure);
+    void Save(ZobristKey pawnKey, int32_t score, const PawnStructure& structure);
 
 private:
     INLINE std::size_t Index(ZobristKey key) const { return key & (PAWN_TABLE_SIZE - 1); }

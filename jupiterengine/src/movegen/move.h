@@ -20,24 +20,21 @@ union LongAlgebraicMove {
     static LongAlgebraicMove FromChars(char *chars);
 };
 
-struct Move {
-    uint8_t from{UINT8_MAX};
-    uint8_t to{UINT8_MAX};
-    Piece::Value piece{Piece::Invalid()};
-    Piece::Value promote{Piece::Invalid()};
+union Move {
+    struct {
+        uint8_t from{UINT8_MAX};
+        uint8_t to{UINT8_MAX};
+        Piece::Value piece{Piece::Invalid()};
+        Piece::Value promote{Piece::Invalid()};
+    };
+    uint32_t bits; // For comparisons, Pack() gives a smaller (18 bit) representation 
 
     Move() = default;
     Move(uint8_t from, uint8_t to, Piece::Value piece, Piece::Value promote = Piece::Invalid())
         : from{from}, to{to}, piece{piece}, promote{promote} {}
 
     LongAlgebraicMove ToLAN() const;
-    bool operator==(const Move& other) const 
-    {
-        return from == other.from 
-            && to == other.to 
-            && piece == other.piece 
-            && promote == other.promote;
-    }
+    INLINE bool operator==(const Move& other) const { return bits == other.bits; }
     INLINE uint32_t Pack() const 
     {
         uint32_t packed = 0;
@@ -96,7 +93,7 @@ struct MoveData {
 //       My program does not currently do ANY bounds checks and will segfault in rare positions.
 //       This is NOT a safe assumption, but is extremely unlikely to bite me in regular play.
 //       If someone starts messing with the starting position, this WILL BREAK.
-const uint64_t MAX_QUIETS = 128; // Theoretical upper bound is 218 (9 queens)
+const uint64_t MAX_QUIETS = 96; // Theoretical upper bound is 218 (9 queens)
 const uint64_t MAX_ATTACKS = 32; // Theoretical upper bound is 74 (9 queens)
 
 using QuietMoveBuffer = Buffer<Move, MAX_QUIETS>;
