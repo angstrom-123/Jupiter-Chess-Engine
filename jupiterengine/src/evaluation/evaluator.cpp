@@ -10,13 +10,13 @@
 #include <cmath>
 #include <cstdint>
 
-struct PositionData {
-    uint8_t counts[Color::MAX_ENUM][Piece::MAX_ENUM - 1]{};
-    Bitboard kingBits[Color::MAX_ENUM]{};
-    uint8_t kingIndices[Color::MAX_ENUM]{};
-    PawnStructure pawns{};
-    float phase{0.0};
-};
+// TODO: Get rid of all the floats and see if the profile comes down. 
+//          Register pressure and moving between fp and int registers could be VERY expensive. This 
+//          is suggested by the expensive movq and vmovups instructions (13% and 20% respectively) 
+//          in the profile.
+//
+//       Also, just reduced padding of pawn table entries 56 -> 48 bytes so we can see if that 
+//          helps improve probing speed.
 
 int32_t Evaluator::Evaluate(const BoardState& state)
 {
@@ -29,34 +29,17 @@ int32_t Evaluator::Evaluate(const BoardState& state)
         return 0;
 
     PositionData data;
-    CountPieces(std::forward<const BoardState>(state), data);
-    
+
+    CountPieces(state, data);
     if (IsMaterialDraw(data))
         return 0;
 
-
+    // Initial lazy evaluation (very fast to compute)
     int32_t eval = 0;
 
-    // Initial lazy evaluation (very fast to compute)
-
-    data.phase = GamePhase(std::forward<const BoardState>(state));
-    FindKings(std::forward<const BoardState>(state), data);
-    PTEntry pte;
-    if ((pte = m_PawnTable.Get(state.pawnKey)).IsValid()) {
-        // Lookup pawn structure and score
-        m_PawnTableHits++;
-        data.pawns = pte.structure;
-        eval += pte.score;
-    } else {
-        // Evaluate from scratch and save to pawn table
-        ComputePawnStructure(std::forward<const BoardState>(state), data);
-        int32_t score = IndependentPawnStructure(std::forward<const BoardState>(state), data);
-        m_PawnTable.Save(state.pawnKey, score, data.pawns);
-        eval += score;
-    }
-
-    eval += MaterialBalance(std::forward<const BoardState>(state), data);
-    eval += PiecePositions(std::forward<const BoardState>(state), data);
+    ComputeGamePhase(state, data);
+    eval += MaterialBalance(state, data);
+    eval += PiecePositions(state, data);
 
     // TODO: This threshold should be roughly equivalent to maximum eval swing from the subsequent 
     //       evaluation factors. I just magicified 1500 but it seems to improve the engine ¯\(ツ)/¯
@@ -64,13 +47,29 @@ int32_t Evaluator::Evaluate(const BoardState& state)
     if (std::abs(eval) >= LAZY_THRESHOLD)
         return eval;
 
-    eval += Mobility(std::forward<const BoardState>(state), data);
-    eval += Mopup(std::forward<const BoardState>(state), data);
-    eval += KingMobility(std::forward<const BoardState>(state), data);
-    eval += KingPawnTropism(std::forward<const BoardState>(state), data);
-    eval += PawnShield(std::forward<const BoardState>(state), data);
-    eval += PawnStorm(std::forward<const BoardState>(state), data);
-    eval += OpenFiles(std::forward<const BoardState>(state), data);
+    // Probe the pawn hash table for a matching entry, or compute the structure ourselves
+    PTEntry pte = m_PawnTable.Get(state.pawnKey);
+    if (pte.IsValid()) {
+        // Lookup pawn structure and score
+        m_PawnTableHits++;
+        data.pawns = pte.structure;
+        eval += pte.score;
+    } else {
+        // Evaluate from scratch and save to pawn table
+        ComputePawnStructure(state, data);
+        int32_t score = IndependentPawnStructure(state, data);
+        m_PawnTable.Save(state.pawnKey, score, data.pawns);
+        eval += score;
+    }
+
+    FindKings(state, data);
+    eval += Mobility(state);
+    eval += Mopup(state, data);
+    eval += KingMobility(state, data);
+    eval += KingPawnTropism(state, data);
+    eval += PawnShield(state, data);
+    eval += PawnStorm(state, data);
+    eval += OpenFiles(state, data);
 
     return eval;
 }
@@ -104,8 +103,8 @@ int32_t Evaluator::PiecePositions(const BoardState& state, const PositionData& d
 {
     JUPITER_TRACE();
 
-    PSTScore relativeScore = (state.turn == Color::WHITE) ? state.pstScore : -state.pstScore;
-    return ((relativeScore.midgame * (1.0 - data.phase)) + (relativeScore.endgame * data.phase)) * m_Constants.pstWeight;
+    PSTScore score = (state.turn == Color::WHITE) ? state.pstScore : -state.pstScore;
+    return ((score.midgame * (1.0 - data.phase)) + (score.endgame * data.phase)) * m_Constants.pstWeight;
 }
 
 int32_t Evaluator::Mopup(const BoardState& state, const PositionData& data) const 
@@ -115,8 +114,7 @@ int32_t Evaluator::Mopup(const BoardState& state, const PositionData& data) cons
     int32_t mopupEval = 0;
 
     // Only mopup if endgame
-    const float MIN_PHASE = 0.7;
-    if (data.phase < MIN_PHASE)
+    if (data.phase < LATEGAME_PHASE)
         return 0;
 
     uint8_t friendlyKing = data.kingIndices[state.turn];
@@ -128,8 +126,7 @@ int32_t Evaluator::Mopup(const BoardState& state, const PositionData& data) cons
     // Bonus for enemy king proximity to edge
     mopupEval += m_DistanceTable.ManhattanFromCenter(enemyKing) * m_Constants.mopupEdgeFactor;
 
-    // Scale by endgame weight
-    return mopupEval * (data.phase - MIN_PHASE);
+    return mopupEval * (data.phase - LATEGAME_PHASE);
 }
 
 int32_t Evaluator::KingMobility(const BoardState& state, const PositionData& data) const 
@@ -138,39 +135,34 @@ int32_t Evaluator::KingMobility(const BoardState& state, const PositionData& dat
 
     int32_t kingMobilityEval = 0;
 
-    const float MAX_PHASE = 0.7;
-    if (data.phase > MAX_PHASE)
+    if (data.phase > LATEGAME_PHASE)
         return 0;
     
     uint8_t kingIndex = data.kingIndices[state.turn];
 
     // Imagine a friendly queen where the king is and see how much it can move
     AttackMoveBuffer attacks;
-    movegen::FindQueenAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable), kingIndex, attacks);
+    movegen::FindQueenAttacks(state, m_AttackTable, kingIndex, attacks);
 
     // Penalize excessive mobility (more than 3 squares)
     if (attacks.Size() > 3)
         kingMobilityEval += (attacks.Size() - 3) * m_Constants.kingMobilityFactor;
 
-    return kingMobilityEval * (MAX_PHASE - data.phase);
+    return kingMobilityEval * (1.0 - data.phase);
 }
 
-int32_t Evaluator::Mobility(const BoardState& state, const PositionData& data) const 
+int32_t Evaluator::Mobility(const BoardState& state) const 
 {
     JUPITER_TRACE();
 
-    (void) data;
-
-    std::size_t nAttacks = movegen::CountAllAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
-    std::size_t nQuiets = movegen::CountAllQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
+    std::size_t nAttacks = movegen::CountAllAttacks(state, m_AttackTable);
+    std::size_t nQuiets = movegen::CountAllQuiets(state, m_AttackTable);
     return (nAttacks + nQuiets) * m_Constants.mobilityFactor;
 }
 
 int32_t Evaluator::KingPawnTropism(const BoardState& state, const PositionData& data) const 
 {
     JUPITER_TRACE();
-
-    const PawnStructure::Relative& rel = data.pawns.relative[state.turn];
 
     uint8_t distances[PawnKind::MAX_ENUM] = { 0, 0, 0}; // Manhattan (total)
     uint8_t weightCount = 0;
@@ -185,9 +177,12 @@ int32_t Evaluator::KingPawnTropism(const BoardState& state, const PositionData& 
         }
     };
 
-    SumDistances(state.pieces.Occupancy(state.turn, Piece::PAWN) & ~(rel.weak | rel.passed), PawnKind::REGULAR);
-    SumDistances(rel.weak, PawnKind::WEAK);
-    SumDistances(rel.passed, PawnKind::PASSED);
+    Bitboard weak = data.pawns.weak[state.turn];
+    Bitboard passed = data.pawns.passed[state.turn];
+
+    SumDistances(state.pieces.Occupancy(state.turn, Piece::PAWN) & ~(weak | passed), PawnKind::REGULAR);
+    SumDistances(weak, PawnKind::WEAK);
+    SumDistances(passed, PawnKind::PASSED);
 
     // Avoid division by 0 if there are no pawns
     if (weightCount == 0)
@@ -199,7 +194,7 @@ int32_t Evaluator::KingPawnTropism(const BoardState& state, const PositionData& 
     kpTropismEval /= weightCount;
 
     // More important in endgame, scale up
-    return kpTropismEval * std::max(data.phase, 0.6f);
+    return kpTropismEval * std::max(data.phase, LATEGAME_PHASE);
 }
 
 int32_t Evaluator::PawnShield(const BoardState& state, const PositionData& data) const
@@ -208,11 +203,9 @@ int32_t Evaluator::PawnShield(const BoardState& state, const PositionData& data)
 
     int32_t shieldEval = 0;
 
-    const float MAX_PHASE = 0.7;
-    if (data.phase > MAX_PHASE)
-        return 0.0;
+    if (data.phase > LATEGAME_PHASE)
+        return 0;
 
-    const PawnStructure::Relative& rel = data.pawns.relative[state.turn];
     uint8_t kingFile = data.kingIndices[state.turn] & 7;
     uint8_t kingRank = data.kingIndices[state.turn] / 8;
 
@@ -220,36 +213,38 @@ int32_t Evaluator::PawnShield(const BoardState& state, const PositionData& data)
         // Shield can move up with the king
         uint8_t shieldRank = (2 * state.turn) + kingRank - 1;
 
+        const PawnRanks& ranks = data.pawns.furthest[state.turn];
+
         // Only evaluate shield on the flanks
         uint8_t missingPawns = 0;
         if (kingFile < 3) {
             // Pawns on the 0, 1, 2 files need to be at shield rank
-            if (rel.furthest.Rank(0) != shieldRank) missingPawns++;
-            if (rel.furthest.Rank(1) != shieldRank) missingPawns++;
-            if (rel.furthest.Rank(2) != shieldRank) missingPawns++;
+            if (ranks.Rank(0) != shieldRank) missingPawns++;
+            if (ranks.Rank(1) != shieldRank) missingPawns++;
+            if (ranks.Rank(2) != shieldRank) missingPawns++;
         } else if (kingFile > 4) {
             // Pawns on the 5, 6, 7 files need to be at shield rank
-            if (rel.furthest.Rank(5) != shieldRank) missingPawns++;
-            if (rel.furthest.Rank(6) != shieldRank) missingPawns++;
-            if (rel.furthest.Rank(7) != shieldRank) missingPawns++;
+            if (ranks.Rank(5) != shieldRank) missingPawns++;
+            if (ranks.Rank(6) != shieldRank) missingPawns++;
+            if (ranks.Rank(7) != shieldRank) missingPawns++;
         }
 
         shieldEval += missingPawns * m_Constants.missingShieldPawnFactor;
     }
 
-    // More important in middlegame
-    return shieldEval * (MAX_PHASE - data.phase);
-}
+    return shieldEval * (1.0 - data.phase);}
 
 int32_t Evaluator::PawnStorm(const BoardState& state, const PositionData& data) const
 {
     JUPITER_TRACE();
 
-    const float MAX_PHASE = 0.7;
-    if (data.phase > MAX_PHASE)
-        return 0.0;
+    if (data.phase > LATEGAME_PHASE)
+        return 0;
 
-    const PawnStructure::Relative& opp = data.pawns.relative[Color::Opposite(state.turn)];
+    // const PawnStructure::Relative& opp = data.pawns.relative[Color::Opposite(state.turn)];
+    Color::Value enemy = Color::Opposite(state.turn);
+    const PawnRanks& ranks = data.pawns.furthest[enemy];
+
     uint8_t kingIndex = data.kingIndices[state.turn];
     uint8_t kingFile = kingIndex & 7;
     
@@ -257,9 +252,9 @@ int32_t Evaluator::PawnStorm(const BoardState& state, const PositionData& data) 
 
     // Count average distance to opponent pawns in current and adjacent files (further is better)
     uint8_t proximity = 23; // 8 + 7 + 8
-    uint8_t rank0 = opp.furthest.Rank(kingFile);
-    uint8_t rank1 = (kingFile > 0) ? opp.furthest.Rank(kingFile - 1) : UINT8_MAX;
-    uint8_t rank2 = (kingFile < 7) ? opp.furthest.Rank(kingFile + 1) : UINT8_MAX;
+    uint8_t rank0 = ranks.Rank(kingFile);
+    uint8_t rank1 = (kingFile > 0) ? ranks.Rank(kingFile - 1) : UINT8_MAX;
+    uint8_t rank2 = (kingFile < 7) ? ranks.Rank(kingFile + 1) : UINT8_MAX;
 
     if (rank0 < UINT8_MAX) proximity -= m_DistanceTable.Manhattan(kingIndex, ToIndex(kingFile, rank0));
     if (rank1 < UINT8_MAX) proximity -= m_DistanceTable.Manhattan(kingIndex, ToIndex(kingFile - 1, rank1));
@@ -267,7 +262,7 @@ int32_t Evaluator::PawnStorm(const BoardState& state, const PositionData& data) 
 
     stormEval += proximity * m_Constants.stormingPawnFactor;
 
-    return stormEval * (MAX_PHASE - data.phase);
+    return stormEval * (1.0 - data.phase);
 }
 
 int32_t Evaluator::OpenFiles(const BoardState& state, const PositionData& data) const
@@ -295,7 +290,7 @@ int32_t Evaluator::IndependentPawnStructure(const BoardState& state, const Posit
     int32_t structureEval = 0;
 
     // Weak pawns
-    structureEval += std::popcount(data.pawns.relative[state.turn].weak) * m_Constants.weakPawnFactor;
+    structureEval += std::popcount(data.pawns.weak[state.turn]) * m_Constants.weakPawnFactor;
 
     // Connected pawns
     {
@@ -314,30 +309,23 @@ int32_t Evaluator::IndependentPawnStructure(const BoardState& state, const Posit
     return structureEval;
 }
 
-// 0.0 - 1.0 (midgame - endgame)
-float Evaluator::GamePhase(const BoardState& state) const
+// 0 - 24 (midgame - endgame)
+void Evaluator::ComputeGamePhase(const BoardState& state, PositionData& data) const
 {
     JUPITER_TRACE();
 
     Color::Value friendly = state.turn;
     Color::Value enemy = Color::Opposite(state.turn);
 
-    constexpr int64_t QUEEN_PHASE = 4;
-    constexpr int64_t ROOK_PHASE = 2;
-    constexpr int64_t BISHOP_PHASE = 1;
-    constexpr int64_t KNIGHT_PHASE = 1;
+    uint8_t nQueens = state.pieces.Count(friendly, Piece::QUEEN) + state.pieces.Count(enemy, Piece::QUEEN);
+    uint8_t nRooks = state.pieces.Count(friendly, Piece::ROOK) + state.pieces.Count(enemy, Piece::ROOK);
+    uint8_t nBishops = state.pieces.Count(friendly, Piece::BISHOP) + state.pieces.Count(enemy, Piece::BISHOP);
+    uint8_t nKnights = state.pieces.Count(friendly, Piece::KNIGHT) + state.pieces.Count(enemy, Piece::KNIGHT);
 
-    constexpr int64_t MAX_PHASE = (QUEEN_PHASE * 2) + (ROOK_PHASE * 4) + (BISHOP_PHASE * 4) + (KNIGHT_PHASE * 4);
+    uint8_t phase = (QUEEN_PHASE * nQueens) + (ROOK_PHASE * nRooks) + (BISHOP_PHASE * nBishops) + (KNIGHT_PHASE * nKnights);
+    phase = std::min(phase, MAX_PHASE); // Clamp in case of promotions
 
-    int64_t nQueens = state.pieces.Count(friendly, Piece::QUEEN) + state.pieces.Count(enemy, Piece::QUEEN);
-    int64_t nRooks = state.pieces.Count(friendly, Piece::ROOK) + state.pieces.Count(enemy, Piece::ROOK);
-    int64_t nBishops = state.pieces.Count(friendly, Piece::BISHOP) + state.pieces.Count(enemy, Piece::BISHOP);
-    int64_t nKnights = state.pieces.Count(friendly, Piece::KNIGHT) + state.pieces.Count(enemy, Piece::KNIGHT);
-
-    int64_t currentPhase = (QUEEN_PHASE * nQueens) + (ROOK_PHASE * nRooks) + (BISHOP_PHASE * nBishops) + (KNIGHT_PHASE * nKnights);
-    currentPhase = std::min(currentPhase, MAX_PHASE); // Clamp in case of promotions
-
-    return 1.0 - (static_cast<float>(currentPhase) / static_cast<float>(MAX_PHASE));
+    data.phase = static_cast<float>(MAX_PHASE - phase) / MAX_PHASE;
 }
 
 int32_t Evaluator::SEE(const BoardState& state, Move move) const
@@ -364,22 +352,19 @@ int32_t Evaluator::SEE(const BoardState& state, Move move) const
 
     Color::Value turn = enemy;
     Piece::Value target = move.piece;
-    while (true) {
+    while (1) {
         Color::Value opponentTurn = Color::Opposite(turn);
 
         // Find attackers
         Bitboard attackers[Color::MAX_ENUM][Piece::MAX_ENUM];
-        for (const Color::Value friendly : { Color::WHITE, Color::BLACK }) {
-            Color::Value opponent = Color::Opposite(friendly);
 
-            // Had to unroll the loop due to specialised functions being used per piece type
-            attackers[friendly][Piece::PAWN]   = m_AttackTable.PawnAttacks(move.to, opponent) & pieces.Occupancy(friendly, Piece::PAWN);
-            attackers[friendly][Piece::KNIGHT] = m_AttackTable.KnightAttacks(move.to) & pieces.Occupancy(friendly, Piece::KNIGHT);
-            attackers[friendly][Piece::BISHOP] = m_AttackTable.BishopAttacks(move.to, pieces.Occupancy()) & pieces.Occupancy(friendly, Piece::BISHOP);
-            attackers[friendly][Piece::ROOK]   = m_AttackTable.RookAttacks(move.to, pieces.Occupancy()) & pieces.Occupancy(friendly, Piece::ROOK);
-            attackers[friendly][Piece::QUEEN]  = m_AttackTable.QueenAttacks(move.to, pieces.Occupancy()) & pieces.Occupancy(friendly, Piece::QUEEN);
-            attackers[friendly][Piece::KING]   = m_AttackTable.KingAttacks(move.to) & pieces.Occupancy(friendly, Piece::KING);
-        }
+        // Had to unroll the loop due to specialised functions being used per piece type
+        attackers[turn][Piece::PAWN]   = m_AttackTable.PawnAttacks(move.to, opponentTurn) & pieces.Occupancy(turn, Piece::PAWN);
+        attackers[turn][Piece::KNIGHT] = m_AttackTable.KnightAttacks(move.to) & pieces.Occupancy(turn, Piece::KNIGHT);
+        attackers[turn][Piece::BISHOP] = m_AttackTable.BishopAttacks(move.to, pieces.Occupancy()) & pieces.Occupancy(turn, Piece::BISHOP);
+        attackers[turn][Piece::ROOK]   = m_AttackTable.RookAttacks(move.to, pieces.Occupancy()) & pieces.Occupancy(turn, Piece::ROOK);
+        attackers[turn][Piece::QUEEN]  = m_AttackTable.QueenAttacks(move.to, pieces.Occupancy()) & pieces.Occupancy(turn, Piece::QUEEN);
+        attackers[turn][Piece::KING]   = m_AttackTable.KingAttacks(move.to) & pieces.Occupancy(turn, Piece::KING);
 
         // Find least valuable attacker
         uint8_t from = UINT8_MAX;
@@ -399,6 +384,10 @@ int32_t Evaluator::SEE(const BoardState& state, Move move) const
         // Update gain
         gain.PushBack(Piece::Evaluate(target) - gain[gain.Size() - 1]);
 
+        // Early exit if the sign is decided
+        if (gain.Size() > 1 && std::abs(gain[gain.Size() - 1]) >= Piece::Evaluate(Piece::QUEEN))
+            break;
+
         // Simulate capture
         pieces.Unset(turn, attacker, from);
         pieces.Unset(opponentTurn, target, move.to);
@@ -416,7 +405,7 @@ int32_t Evaluator::SEE(const BoardState& state, Move move) const
     return gain[0];
 }
 
-void Evaluator::CountPieces(const BoardState& state, PositionData& data) const 
+void Evaluator::CountPieces(const BoardState& state, PositionData& data) const
 {
     JUPITER_TRACE();
 
@@ -469,8 +458,6 @@ void Evaluator::ComputePawnStructure(const BoardState& state, PositionData& data
 {
     JUPITER_TRACE();
 
-    PawnStructure& ps = data.pawns;
-
     const Bitboard FILE_MASK = 0b00000001'00000001'00000001'00000001'00000001'00000001'00000001'00000001;
 
     // Open files
@@ -482,7 +469,7 @@ void Evaluator::ComputePawnStructure(const BoardState& state, PositionData& data
             blocked |= (FILE_MASK << file);
             pawns &= (pawns - 1);
         }
-        ps.openFiles = ~blocked;
+        data.pawns.openFiles = ~blocked;
     }
 
     for (const Color::Value color : Color::values) {
@@ -495,7 +482,7 @@ void Evaluator::ComputePawnStructure(const BoardState& state, PositionData& data
             for (uint8_t i = count; i > 1; i--) {
                 // Count from the lowest to the highest
                 uint8_t index = (color == Color::WHITE) ? 63 - std::countl_zero(filePawns) : std::countr_zero(filePawns);
-                ps.relative[color].weak |= (1ull << index);
+                data.pawns.weak[color] |= (1ull << index);
                 filePawns = (color == Color::WHITE) ? filePawns & ~(1ull << index) : filePawns & (filePawns - 1);
             }
         }
@@ -508,7 +495,7 @@ void Evaluator::ComputePawnStructure(const BoardState& state, PositionData& data
 
             // Save to bitboard if it has no neighbours
             if (!(m_MaskTable.NeighbouringFiles(file) & pawns))
-                ps.relative[color].weak |= (1ull << index);
+                data.pawns.weak[color] |= (1ull << index);
 
             isolatedPawns &= (isolatedPawns - 1);
         }
@@ -524,7 +511,7 @@ void Evaluator::ComputePawnStructure(const BoardState& state, PositionData& data
             uint8_t index = (color == Color::WHITE) ? std::countr_zero(furthestPawns) : 63 - std::countl_zero(furthestPawns);
             uint8_t file = index & 7;
             if (!(finishedFiles & (1ull << file))) {
-                ps.relative[color].furthest.Pack(file, index / 8);
+                data.pawns.furthest[color].Pack(file, index / 8);
                 finishedFiles |= (1ull << file);
             }
             
@@ -535,14 +522,14 @@ void Evaluator::ComputePawnStructure(const BoardState& state, PositionData& data
         // Passed pawns
         for (uint8_t file = 0; file < 8; file++) {
             // Passed pawns are strictly the frontmost in each rank
-            uint8_t rank = ps.relative[color].furthest.Rank(file);
+            uint8_t rank = data.pawns.furthest[color].Rank(file);
             if (rank == UINT8_MAX)
                 continue;
 
             // No opponent pawns in the way means it is a passed pawn
             Bitboard opponentPawns = state.pieces.Occupancy(Color::Opposite(color), Piece::PAWN);
             if (!(opponentPawns & m_MaskTable.PassedPawnBlockers(color, 8 * rank + file)))
-                ps.relative[color].passed |= (1ull << (rank * 8 + file));
+                data.pawns.passed[color] |= (1ull << (rank * 8 + file));
         }
     }
 }

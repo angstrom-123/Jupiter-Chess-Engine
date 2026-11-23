@@ -3,7 +3,7 @@
 #include "datastructure/buffer.h"
 #include <cstdint>
 #include <cstdlib>
-#include "inlines.h"
+#include "util/inlines.h"
 
 INLINE uint8_t ToIndex(uint8_t x, uint8_t y) { return x + 8 * y; }
 INLINE uint8_t Difference(uint8_t a, uint8_t b) { return (a > b) ? a - b : b - a; }
@@ -21,7 +21,7 @@ struct Color {
     INLINE static bool IsValid(Value color) { return color < Value::MAX_ENUM; }
     INLINE static Value Opposite(Value color) 
     { 
-        return static_cast<Value>(1 - color);
+        return static_cast<Value>(color ^ 1);
     }
     static const char *Show(Value value)
     {
@@ -65,8 +65,8 @@ INLINE Piece::Value operator++(Piece::Value& value, int)
 using CastlingRights = uint8_t;
 struct CastlingRight {
     typedef enum : uint8_t {
-        KINGSIDE_WHITE = 0x1,
-        KINGSIDE_BLACK = 0x2,
+        KINGSIDE_WHITE  = 0x1,
+        KINGSIDE_BLACK  = 0x2,
         QUEENSIDE_WHITE = 0x4,
         QUEENSIDE_BLACK = 0x8,
     } Value;

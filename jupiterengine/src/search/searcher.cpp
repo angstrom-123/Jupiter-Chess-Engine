@@ -62,7 +62,8 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
         Move bestMove = Move::Invalid();
 
         // Initialise movegen
-        MoveStream movegen(state, m_AttackTable, m_Eval, m_HistoryTable, m_Killers[0], false);
+        MoveStream movegen;
+        movegen.Init(state, m_AttackTable, m_Killers[0], false);
 
         // Do not update alpha and beta at the root
         TranspositionTableEntry entry = m_TranspositionTable.Probe(state.zobristKey);
@@ -82,7 +83,7 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
         }
 
         Move move;
-        while ((move = movegen.Stream()).IsValid()) {
+        while ((move = movegen.Stream(state, m_Eval, m_HistoryTable)).IsValid()) {
             int32_t score = 0;
 
             // Search move (if legal)
@@ -108,7 +109,6 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
             if (m_SearchAborted)
                 break;
 
-            // Update search terms
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = move;
@@ -116,12 +116,10 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
             }
 
             if (score >= window.beta) {
-                // History heuristic
-                m_HistoryTable[move.from][move.to] += depth * depth;
-
-                // Killer move
-                if (movegen.IsQuietMove() && !m_Killers[0].Contains(move))
-                    m_Killers[0].Push(move);
+                if (movegen.IsQuietMove()) {
+                    UpdateHistory(state, move, depth);
+                    UpdateKillers(move, 0);
+                }
                 break;
             }
         }
@@ -133,7 +131,7 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
         finalMove = bestMove;
 
         // Do not continue to higher depths if there is only one legal move
-        if (movegen.GetMoveCount() == 1)
+        if (movegen.IsFirstMove())
             break;
     }
 
@@ -251,7 +249,8 @@ int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, 
     Move bestMove = Move::Invalid();
 
     // Initialise movegen
-    MoveStream movegen(state, m_AttackTable, m_Eval, m_HistoryTable, m_Killers[std::min(ply, MAX_PLY)], false);
+    MoveStream movegen;
+    movegen.Init(state, m_AttackTable, m_Killers[std::min(ply, MAX_PLY)], false);
 
     TranspositionTableEntry entry = m_TranspositionTable.Probe(state.zobristKey);
     if (entry.IsValid() && entry.depth >= depthUnits / PLY_UNIT && state.IsPseudoLegal(movegen.GetAttacks(), movegen.GetQuiets(), entry.bestMove)) {
@@ -277,7 +276,7 @@ int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, 
     }
 
     Move move;
-    while ((move = movegen.Stream()).IsValid()) {
+    while ((move = movegen.Stream(state, m_Eval, m_HistoryTable)).IsValid()) {
         int32_t score = 0;
 
         // Search move (if legal)
@@ -311,15 +310,9 @@ int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, 
         }
 
         if (score >= window.beta) {
-            // History heuristic
-            uint8_t depth = depthUnits / PLY_UNIT;
-            m_HistoryTable[move.from][move.to] += depth * depth;
-
-            // Killer moves
-            if (ply < MAX_PLY) {
-                if (movegen.IsQuietMove() && !m_Killers[ply].Contains(move)) {
-                    m_Killers[ply].Push(move);
-                }
+            if (movegen.IsQuietMove()) {
+                UpdateHistory(state, move, depthUnits / PLY_UNIT);
+                UpdateKillers(move, ply);
             }
             break;
         }
@@ -366,9 +359,11 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window,
     Move bestMove = Move::Invalid();
 
     // Quiescence mode, quiet moves only considered when in check
-    MoveStream movegen(state, m_AttackTable, m_Eval, m_HistoryTable, m_Killers[std::min(ply, MAX_PLY)], !inCheck);
+    MoveStream movegen;
+    movegen.Init(state, m_AttackTable, m_Killers[std::min(ply, MAX_PLY)], !inCheck);
+
     Move move;
-    while ((move = movegen.Stream()).IsValid()) {
+    while ((move = movegen.Stream(state, m_Eval, m_HistoryTable)).IsValid()) {
         // Delta pruning (only non-promotions when not in check)
         if (!inCheck && !Piece::IsValid(move.promote)) {
             const int32_t DELTA_MARGIN = Piece::Evaluate(Piece::KNIGHT); // TODO: This should be tunable?
@@ -409,16 +404,10 @@ int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window,
             window.alpha = std::max(window.alpha, score);
         }
 
-        if (score >= window.beta) {
-            // Killer moves are strictly quiet moves which are avoided in quiescence. We can see 
-            // quiets here if a king is in check and must evade it
-            if (ply < MAX_PLY) {
-                if (movegen.IsQuietMove() && !m_Killers[ply].Contains(move)) {
-                    m_Killers[ply].Push(move);
-                }
-            }
+        // NOTE: Not updating history table or killer moves as any quiet moves would be forced 
+        //       by check so not necessarily good overall.
+        if (score >= window.beta)
             break;
-        }
     }
 
     // Could be in checkmate
@@ -510,7 +499,7 @@ void Searcher::TuneEval(const EvaluatorConstants& weights)
 {
     JUPITER_TRACE();
 
-    m_Eval.Tune(std::forward<const EvaluatorConstants&>(weights));
+    m_Eval.Tune(weights);
 }
 
 EvaluatorConstants Searcher::EvalWeights() const
@@ -589,7 +578,7 @@ Move Searcher::PickOpeningMove(const BoardState& state)
         return Move::Invalid();
 
     OpeningMoves moves;
-    if (!m_OpeningBook.LookupMoves(std::forward<const BoardState>(state), moves)) {
+    if (!m_OpeningBook.LookupMoves(state, moves)) {
         m_InOpeningBook = false;
         return Move::Invalid();
     }
@@ -598,3 +587,15 @@ Move Searcher::PickOpeningMove(const BoardState& state)
     return moves[m_FastRNG.Generate() % moves.Size()].first;
 }
 
+void Searcher::UpdateHistory(const BoardState& state, Move move, uint8_t depth)
+{
+    int16_t clamped = std::min(static_cast<int16_t>(depth * depth), MAX_HISTORY);
+    int16_t entry = m_HistoryTable[state.turn][move.from][move.to];
+    m_HistoryTable[state.turn][move.from][move.to] += clamped - (entry * clamped / MAX_HISTORY);
+}
+
+void Searcher::UpdateKillers(Move move, uint8_t ply)
+{
+    if (ply < MAX_PLY && !m_Killers[ply].Contains(move))
+        m_Killers[ply].Push(move);
+}

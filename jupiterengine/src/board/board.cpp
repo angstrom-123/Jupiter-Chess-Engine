@@ -5,7 +5,6 @@
 #include <string>
 
 #include "evaluation/evaluator.h"
-#include "util/fenParser.h"
 #include "libjupiter/board.h"
 #include "core.h"
 #include "util/exception.h"
@@ -18,126 +17,101 @@ namespace libjupiter {
     {
         JUPITER_TRACE();
 
-        if (fen == nullptr)
-            StartPos();
-        else
-            fen::Parse(fen, &m_HalfMoves, &m_FullMoves, m_State);
-
-        m_State.pstScore = ComputePSTScore();
-        m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
-        m_State.pawnKey = m_Zobrist.ComputePawnKey(m_State);
-
-        m_History.Push(m_State);
+        m_DTSManager = new DTSManager(fen ? fen : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     }
 
     Board::~Board()
     {
-        delete m_Searcher;
-    }
-
-    // Now doing incremental updates so need to initialise it
-    PSTScore Board::ComputePSTScore()
-    {
-        JUPITER_TRACE();
-
-        PSTScore score = PSTScore(0, 0);
-        for (Color::Value color : { Color::WHITE, Color::BLACK }) {
-            for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
-                Bitboard occupancy = m_State.pieces.Occupancy(color, piece);
-                while (occupancy) {
-                    uint8_t index = std::countr_zero(occupancy);
-                    score += m_PieceSquareTables.Get(color, piece, index);
-                    occupancy &= (occupancy - 1);
-                }
-            }
-        }
-        return score;
+        delete m_DTSManager;
     }
 
     void Board::SetTimeControl(float seconds, float increment)
     {
         JUPITER_TRACE();
 
-        m_Searcher->SetTimeControl(seconds, increment);
+        m_DTSManager->SetTimeControl(seconds, increment);
     }
 
     Move Board::Go(uint64_t moveMs)
     {
         JUPITER_TRACE();
 
-	return m_Searcher->FindBest(m_State, m_History, moveMs);
+	return m_DTSManager->FindBest(moveMs);
     }
 
     void Board::MakeMove(LongAlgebraicMove lan)
     {
         JUPITER_TRACE();
 
-        Move move = Move::FromLAN(lan, m_State.pieces);
+        Move move = Move::FromLAN(lan, m_DTSManager->State().pieces);
         if (!move.IsValid())
             throw JupiterException(std::string("Malformed LAN string: '") + lan.chars + "'");
 
-        m_State.MakeMove(m_Zobrist, m_PieceSquareTables, move);
-        m_History.Push(m_State);
-
-        m_HalfMoves++;
-        if (m_State.turn == Color::WHITE)
-            m_FullMoves++;
+        m_DTSManager->MakeMove(move);
     }
 
     void Board::SetWeights(const EvaluatorConstants& weights)
     {
         JUPITER_TRACE();
 
-        m_Searcher->TuneEval(weights);
+        m_DTSManager->SetWeights(weights);
     }
 
     EvaluatorConstants Board::GetWeights() const
     {
         JUPITER_TRACE();
 
-        return m_Searcher->EvalWeights();
+        // return m_Searcher->EvalWeights();
+        // TODO
     }
 
     void Board::GetTelemetry(std::string& result) const
     {
         JUPITER_TRACE();
 
-        m_Searcher->TelemetryJSON(result);
+        // m_Searcher->TelemetryJSON(result);
+        // TODO
     }
 
     void Board::GetMetrics(std::string& result) const
     {
         JUPITER_TRACE();
 
-        m_Searcher->MetricsJSON(result);
+        // m_Searcher->MetricsJSON(result);
+        // TODO
     }
 
 	uint64_t Board::Perft(uint8_t depth)
 	{
 		JUPITER_TRACE();
 
-		return m_Searcher->Perft(m_State, depth);
+		// return m_Searcher->Perft(m_State, depth);
+        // TODO
+        return 0;
 	}
 
 	uint64_t Board::PerftDivide(uint8_t depth, PerftBuffer& buffer)
 	{
 		JUPITER_TRACE();
 
-		return m_Searcher->PerftDivide(m_State, depth, buffer);
+		// return m_Searcher->PerftDivide(m_State, depth, buffer);
+        // TODO
+        return 0;
 	}
 
     void Board::Show(std::string& result) const
     {
         JUPITER_TRACE();
 
+        const BoardState state = m_DTSManager->State();
+
         std::ostringstream ss;
-        ss << "Move " << m_FullMoves << std::endl
-            << (m_State.turn == Color::BLACK ? "Black" : "White") << " to move" << std::endl
+        ss << (state.turn == Color::BLACK ? "Black" : "White") << " to move" << std::endl
             << "Castling rights: " << std::endl
-            << "    White long: " << ((m_State.rights & CastlingRight::QUEENSIDE_WHITE) ? "true" : "false")
-            << ", short: " << ((m_State.rights & CastlingRight::KINGSIDE_WHITE) ? "true" : "false") << std::endl
-            << "    Black long: " << ((m_State.rights & CastlingRight::QUEENSIDE_BLACK) ? "true" : "false")
-            << ", short: " << ((m_State.rights & CastlingRight::KINGSIDE_BLACK) ? "true" : "false") << std::endl
+            << "    White long: " << ((state.rights & CastlingRight::QUEENSIDE_WHITE) ? "true" : "false")
+            << ", short: " << ((state.rights & CastlingRight::KINGSIDE_WHITE) ? "true" : "false") << std::endl
+            << "    Black long: " << ((state.rights & CastlingRight::QUEENSIDE_BLACK) ? "true" : "false")
+            << ", short: " << ((state.rights & CastlingRight::KINGSIDE_BLACK) ? "true" : "false") << std::endl
             << "Board: ";
 
         const char symbols[Color::MAX_ENUM][Piece::MAX_ENUM] = {
@@ -149,24 +123,12 @@ namespace libjupiter {
             if (i % 8 == 0)
                 ss << std::endl << "    ";
             
-            const auto [color, piece] = m_State.pieces.PieceInSquare(i);
+            const auto [color, piece] = state.pieces.PieceInSquare(i);
             if (Color::IsValid(color) && Piece::IsValid(piece))
                 ss << symbols[color][piece] << ' ';
             else
                 ss << ". ";
         }
         result = ss.str();
-    }
-
-    void Board::StartPos()
-    {
-        JUPITER_TRACE();
-
-        m_State.pieces = BitboardSet();
-        m_State.rights = CastlingRight::All();
-        m_State.turn = Color::WHITE;
-        m_State.enPassantIndex = UINT8_MAX;
-        m_HalfMoves = 0;
-        m_FullMoves = 1;
     }
 }

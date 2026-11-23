@@ -1,7 +1,7 @@
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 
 #include <Python.h>
 #include <object.h>
@@ -14,23 +14,47 @@
 #include "util/instrumenter.h"
 #include "libjupiter/board.h"
 #include "movegen/move.h"
-#include "util/stackTrace.h"
+#include "util/log.h"
 
-// Wrappers
+#ifdef DEBUG
+    #include "util/stackTrace.h"
+#endif
 
-void SegfaultHandler(int signal)
+void SignalHandler(int signal)
 {
     JUPITER_TRACE();
 
-    ERROR("\n=== FATAL (" << signal << ") ===");
-    StackTracer::PrintTrace();
+    const char *signalName;
+    switch (signal) {
+        case SIGSEGV:
+            signalName = "SIGSEGV";
+            break;
+        case SIGILL:
+            signalName = "SIGILL";
+            break;
+        case SIGFPE:
+            signalName = "SIGFPE";
+            break;
+        case SIGTERM:
+            signalName = "SIGTERM";
+            break;
+    }
+
+    const char *status = (signal == SIGTERM) ? "GRACEFUL" : "FATAL";
+
+    char message[64]{};
+    std::snprintf(message, 64, "\n=== %s (%i, %s) ===\n", status, signal, signalName);
+    _LOG(loglevel::INFO, message);
 
 #ifdef DEBUG
+    StackTracer::PrintTrace();
     StackTracer::PrintAllTraces();
 #endif
 
     std::abort();
 }
+
+// Wrappers
 
 namespace py {
     struct Board {
@@ -398,10 +422,10 @@ static PyModuleDef libjupiterModule = {
 
 PyMODINIT_FUNC PyInit_libjupiter(void)
 {
-    std::signal(SIGSEGV, SegfaultHandler);
-    std::signal(SIGILL, SegfaultHandler);
-    std::signal(SIGFPE, SegfaultHandler);
-    std::signal(SIGTERM, SegfaultHandler);
+    std::signal(SIGSEGV, SignalHandler);
+    std::signal(SIGILL, SignalHandler);
+    std::signal(SIGFPE, SignalHandler);
+    std::signal(SIGTERM, SignalHandler);
     PyObject * module = PyModule_Create(&libjupiterModule);
     if (!module)
         return nullptr;

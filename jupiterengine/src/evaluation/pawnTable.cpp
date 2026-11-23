@@ -20,7 +20,7 @@ PTEntry PawnTable::Get(ZobristKey pawnKey) const
     return PTEntry::Invalid();
 }
 
-void PawnTable::Save(ZobristKey pawnKey, int32_t score, PawnStructure& structure)
+void PawnTable::Save(ZobristKey pawnKey, int32_t score, const PawnStructure& structure)
 {
     // Do not save positions with 0 pawns
     if (pawnKey == 0)

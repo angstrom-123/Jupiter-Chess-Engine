@@ -1,23 +1,21 @@
 #pragma once
 
+#include "datastructure/twoStack.h"
 #include "movegen/move.h"
-#include "movegen/movegen.h"
 #include "board/boardState.h"
 #include "evaluation/evaluator.h"
 #include <cstdint>
-#include "datastructure/circularStack.h"
-
-#ifndef __clang__
-    #include "nullables.h"
-#endif
 
 // Not quite the theoretical maximums but I don't anticipate this becoming a problem
 const uint8_t MAX_PLY = 32;
 const uint64_t MAX_KILLERS = 2;
 
-using KillerMoveStack = CircularStack<Move, MAX_KILLERS>;
-using KillerMoveBuffer = CircularStack<Move, MAX_KILLERS>[MAX_PLY + 1]; // + 1 to store an empty stack to pass in if ply exceeds MAX_PLY
-using HistoryTable = uint16_t[64][64];
+const int16_t MAX_HISTORY = INT16_MAX;
+
+using KillerMoveStack = TwoStack<Move>; // Special circular stack for just 2 elements, works fine for now
+static_assert(MAX_KILLERS == 2 && "Can't use TwoStack for KillerMoveStack if there are not 2 killers");
+using KillerMoveBuffer = KillerMoveStack[MAX_PLY + 1]; // + 1 to store an empty stack to pass in if ply exceeds MAX_PLY
+using HistoryTable = int16_t[Color::MAX_ENUM][64][64];
 
 struct StreamState {
     typedef enum : uint8_t {
@@ -30,70 +28,53 @@ struct StreamState {
     } Value;
 };
 
+using StreamFlags = uint8_t;
+struct StreamFlag {
+    typedef enum : uint8_t {
+        NONE                = 0x0,
+        QUIESCENCE          = 0x1,
+        LAST_WAS_QUIET      = 0x2,
+        LAST_WAS_BAD_ATTACK = 0x4,
+    } Value;
+};
+
 class MoveStream {
 public:
-    // Full initialisation - contains all info for good move ordering (able to stream)
-    // History table and killer moves are optional if you just want movegen but will segfault if streaming without
-    MoveStream(
-            const BoardState& state, 
-            const AttackTable& attackTable,
-            const Evaluator& eval, 
-            const HistoryTable& historyTable, 
-            const KillerMoveStack& killers,
-            bool quiescenceMode
-    ) 
-        : 
-            m_QuiescenceMode{quiescenceMode},
-            m_State{std::forward<const BoardState>(state)}, 
-            m_Eval{eval},
-            m_HistoryTable{historyTable},
-            m_Killers{KillerMoveStack(killers)} // Copy, should be ok since it is small (32 bytes for 2 killers)
-    {
-        movegen::FindAllAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), m_Attacks);
-        if (!quiescenceMode)
-            movegen::FindAllQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), m_Quiets);
-    }
+    MoveStream() = default;
+    void Init(const BoardState& state, const AttackTable& attackTable, const KillerMoveStack& killers, bool quiescenceMode);
+    Move Stream(const BoardState& state, const Evaluator& eval, const HistoryTable& historyTable);
 
-    const AttackMoveBuffer& GetAttacks() const { return m_Attacks; }
-    const QuietMoveBuffer& GetQuiets() const 
+    INLINE const AttackMoveBuffer& GetAttacks() const { return m_Attacks; }
+    INLINE const QuietMoveBuffer& GetQuiets() const 
     { 
-        // Be careful
-        if (m_QuiescenceMode) 
+        #ifdef DEBUG
+        if (m_Flags & StreamFlag::QUIESCENCE) 
             ERROR("Getting quiets from movestream when in quiescence mode"); 
+        #endif
         return m_Quiets;
     }
-    void SetTTMove(Move move) { m_BestMove = move; }
-    Move Stream();
-    bool IsQuietMove() const { return m_LastWasQuiet; }
-    bool IsBadAttack() const { return m_LastWasBadAttack; }
-    bool IsFirstMove() const { return m_MoveCounter == 1; }
-    uint8_t GetMoveCount() const { return m_MoveCounter; }
+    INLINE void SetTTMove(Move move) { m_BestMove = move; }
+    INLINE bool IsQuietMove() const { return m_Flags & StreamFlag::LAST_WAS_QUIET; }
+    INLINE bool IsBadAttack() const { return m_Flags & StreamFlag::LAST_WAS_BAD_ATTACK; }
+    INLINE bool IsFirstMove() const { return m_MoveCounter == 1; }
+    INLINE uint8_t PseudoLegalCount() const { return m_Attacks.Size() + m_Quiets.Size(); }
+    INLINE uint8_t PseudoLegalsRemaining() const { return PseudoLegalCount() - m_MoveCounter; }
 
 private:
-    void ScoreAttacks();
+    void ScoreAttacks(const BoardState& state);
     Move PopOrderedAttack();
-    void OrderQuiets();
+    void OrderQuiets(const HistoryTable& historyTable, Color::Value turn);
 
 private:
     StreamState::Value m_StreamState{StreamState::NONE};
-
-    bool m_QuiescenceMode;
-    const BoardState& m_State;
-    const Evaluator& m_Eval;
-    const HistoryTable& m_HistoryTable;
-    KillerMoveStack m_Killers;
-
-    Move m_BestMove{Move::Invalid()};
+    StreamFlags m_Flags{0};
+    uint8_t m_MoveCounter{0};
+    uint8_t m_AttacksIndex{0};
+    uint8_t m_BadAttacksIndex{0};
+    uint8_t m_QuietsIndex{0};
     Buffer<uint8_t, MAX_ATTACKS> m_AttackScores;
     AttackMoveBuffer m_Attacks;
     QuietMoveBuffer m_Quiets;
-    AttackMoveBuffer m_BadAttacks;
-
-    uint8_t m_AttacksIndex{0};
-    uint8_t m_QuietsIndex{0};
-    uint8_t m_KillerIndex{0};
-
-    bool m_LastWasQuiet{false};
-    bool m_LastWasBadAttack{false};
-    uint8_t m_MoveCounter{0};
+    KillerMoveStack m_Killers;
+    Move m_BestMove{Move::Invalid()};
 };
