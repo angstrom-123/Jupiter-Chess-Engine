@@ -3,8 +3,10 @@
 #include <cstdint>
 #include <string>
 
-#include "dts/manager.h"
+#include "board/boardState.h"
+#include "board/history.h"
 #include "evaluation/evaluator.h"
+#include "evaluation/pieceSquareTable.h"
 #include "movegen/move.h"
 #include "search/searcher.h"
 
@@ -12,6 +14,7 @@ namespace libjupiter {
     class Board {
     public:
         Board(const char *fen);
+        ~Board();
         void SetTimeControl(float seconds, float increment);
         Move Go(uint64_t moveMs);
         void MakeMove(LongAlgebraicMove lan);
@@ -24,7 +27,15 @@ namespace libjupiter {
         EvaluatorConstants GetWeights() const;
 
     private:
-        DTSManager *m_DTSManager;
+        PSTScore ComputePSTScore();
+        void StartPos();
+
+    private:
+        History m_History{History()};
+        Zobrist m_Zobrist{Zobrist()};
+        PieceSquareTables m_PieceSquareTables{PieceSquareTables()};
+        Searcher *m_Searcher{new Searcher(m_Zobrist, m_PieceSquareTables)};
+        BoardState m_State;
         uint64_t m_FullMoves{1};
         uint64_t m_HalfMoves{0};
     };
