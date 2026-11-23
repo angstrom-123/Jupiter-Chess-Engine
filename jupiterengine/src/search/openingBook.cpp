@@ -259,7 +259,7 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves) cons
 {
     JUPITER_TRACE();
 
-    ZobristKey targetKey = ZobristHash(std::forward<const BoardState>(state));
+    ZobristKey targetKey = ZobristHash(state);
 
     // Binary search (Polyglot orders keys ascending)
     uint64_t low = 0;
@@ -301,7 +301,7 @@ bool OpeningBook::LookupMoves(const BoardState& state, OpeningMoves& moves) cons
             break; // Reached the end of the block
 
         // Read back the move weight first and discard if too low
-        moves.PushBack(ParseMove(std::forward<const BoardState>(state), READ_U64(m_Bytes, offset + 8)));
+        moves.PushBack(ParseMove(state, READ_U64(m_Bytes, offset + 8)));
 
         firstIndex++;
     }

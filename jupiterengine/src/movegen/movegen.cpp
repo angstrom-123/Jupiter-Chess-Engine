@@ -10,7 +10,7 @@ namespace movegen {
     {
         JUPITER_TRACE();
 
-        pawngen::attackFunctions[color](std::forward<const BoardState>(state), attacks);
+        pawngen::attackFunctions[color](state, attacks);
     }
 
     void FindKnightAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index, AttackMoveBuffer& attacks)
@@ -86,37 +86,37 @@ namespace movegen {
         Bitboard queens = state.pieces.Occupancy(state.turn, Piece::QUEEN);
         while (queens) {
             uint8_t index = std::countr_zero(queens);
-            FindQueenAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, attacks);
+            FindQueenAttacks(state, attackTable, index, attacks);
             queens &= (queens - 1);
         }
 
         Bitboard rooks = state.pieces.Occupancy(state.turn, Piece::ROOK);
         while (rooks) {
             uint8_t index = std::countr_zero(rooks);
-            FindRookAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, attacks);
+            FindRookAttacks(state, attackTable, index, attacks);
             rooks &= (rooks - 1);
         }
 
         Bitboard bishops = state.pieces.Occupancy(state.turn, Piece::BISHOP);
         while (bishops) {
             uint8_t index = std::countr_zero(bishops);
-            FindBishopAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, attacks);
+            FindBishopAttacks(state, attackTable, index, attacks);
             bishops &= (bishops - 1);
         }
 
         Bitboard knights = state.pieces.Occupancy(state.turn, Piece::KNIGHT);
         while (knights) {
             uint8_t index = std::countr_zero(knights);
-            FindKnightAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, attacks);
+            FindKnightAttacks(state, attackTable, index, attacks);
             knights &= (knights - 1);
         }
 
-        FindAllPawnAttacks(std::forward<const BoardState>(state), state.turn, attacks);
+        FindAllPawnAttacks(state, state.turn, attacks);
 
         Bitboard kings = state.pieces.Occupancy(state.turn, Piece::KING);
         while (kings) {
             uint8_t index = std::countr_zero(kings);
-            FindKingAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, attacks);
+            FindKingAttacks(state, attackTable, index, attacks);
             kings &= (kings - 1);
         }
     }
@@ -129,37 +129,37 @@ namespace movegen {
         queens = state.pieces.Occupancy(state.turn, Piece::QUEEN);
         while (queens) {
             uint8_t index = std::countr_zero(queens);
-            FindQueenQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, quiets);
+            FindQueenQuiets(state, attackTable, index, quiets);
             queens &= (queens - 1);
         }
 
         Bitboard rooks = state.pieces.Occupancy(state.turn, Piece::ROOK);
         while (rooks) {
             uint8_t index = std::countr_zero(rooks);
-            FindRookQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, quiets);
+            FindRookQuiets(state, attackTable, index, quiets);
             rooks &= (rooks - 1);
         }
 
         Bitboard bishops = state.pieces.Occupancy(state.turn, Piece::BISHOP);
         while (bishops) {
             uint8_t index = std::countr_zero(bishops);
-            FindBishopQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, quiets);
+            FindBishopQuiets(state, attackTable, index, quiets);
             bishops &= (bishops - 1);
         }
 
         Bitboard knights = state.pieces.Occupancy(state.turn, Piece::KNIGHT);
         while (knights) {
             uint8_t index = std::countr_zero(knights);
-            FindKnightQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, quiets);
+            FindKnightQuiets(state, attackTable, index, quiets);
             knights &= (knights - 1);
         }
 
-        FindAllPawnQuiets(std::forward<const BoardState>(state), state.turn, quiets);
+        FindAllPawnQuiets(state, state.turn, quiets);
 
         Bitboard kings = state.pieces.Occupancy(state.turn, Piece::KING);
         while (kings) {
             uint8_t index = std::countr_zero(kings);
-            FindKingQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index, quiets);
+            FindKingQuiets(state, attackTable, index, quiets);
             kings &= (kings - 1);
         }
     }
@@ -167,7 +167,7 @@ namespace movegen {
     void FindAllPawnQuiets(const BoardState& state, Color::Value color, QuietMoveBuffer& quiets)
     {
         JUPITER_TRACE();
-        pawngen::quietFunctions[color](std::forward<const BoardState>(state), quiets);
+        pawngen::quietFunctions[color](state, quiets);
     }
 
     void FindKnightQuiets(const BoardState& state, const AttackTable& attackTable, uint8_t index, QuietMoveBuffer& quiets)
@@ -241,7 +241,7 @@ namespace movegen {
         Bitboard queens = state.pieces.Occupancy(state.turn, Piece::QUEEN);
         while (queens) {
             uint8_t index = std::countr_zero(queens);
-            total += CountQueenAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountQueenAttacks(state, attackTable, index);
             queens &= (queens - 1);
         }
 
@@ -249,30 +249,30 @@ namespace movegen {
         Bitboard rooks = state.pieces.Occupancy(state.turn, Piece::ROOK);
         while (rooks) {
             uint8_t index = std::countr_zero(rooks);
-            total += CountRookAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountRookAttacks(state, attackTable, index);
             rooks &= (rooks - 1);
         }
 
         Bitboard bishops = state.pieces.Occupancy(state.turn, Piece::BISHOP);
         while (bishops) {
             uint8_t index = std::countr_zero(bishops);
-            total += CountBishopAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountBishopAttacks(state, attackTable, index);
             bishops &= (bishops - 1);
         }
 
         Bitboard knights = state.pieces.Occupancy(state.turn, Piece::KNIGHT);
         while (knights) {
             uint8_t index = std::countr_zero(knights);
-            total += CountKnightAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountKnightAttacks(state, attackTable, index);
             knights &= (knights - 1);
         }
 
-        total += CountAllPawnAttacks(std::forward<const BoardState>(state), state.turn);
+        total += CountAllPawnAttacks(state, state.turn);
 
         Bitboard kings = state.pieces.Occupancy(state.turn, Piece::KING);
         while (kings) {
             uint8_t index = std::countr_zero(kings);
-            total += CountKingAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountKingAttacks(state, attackTable, index);
             kings &= (kings - 1);
         }
 
@@ -288,7 +288,7 @@ namespace movegen {
         Bitboard queens = state.pieces.Occupancy(state.turn, Piece::QUEEN);
         while (queens) {
             uint8_t index = std::countr_zero(queens);
-            total += CountQueenQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountQueenQuiets(state, attackTable, index);
             queens &= (queens - 1);
         }
 
@@ -296,30 +296,30 @@ namespace movegen {
         Bitboard rooks = state.pieces.Occupancy(state.turn, Piece::ROOK);
         while (rooks) {
             uint8_t index = std::countr_zero(rooks);
-            total += CountRookQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountRookQuiets(state, attackTable, index);
             rooks &= (rooks - 1);
         }
 
         Bitboard bishops = state.pieces.Occupancy(state.turn, Piece::BISHOP);
         while (bishops) {
             uint8_t index = std::countr_zero(bishops);
-            total += CountBishopQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountBishopQuiets(state, attackTable, index);
             bishops &= (bishops - 1);
         }
 
         Bitboard knights = state.pieces.Occupancy(state.turn, Piece::KNIGHT);
         while (knights) {
             uint8_t index = std::countr_zero(knights);
-            total += CountKnightQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountKnightQuiets(state, attackTable, index);
             knights &= (knights - 1);
         }
 
-        total += CountAllPawnQuiets(std::forward<const BoardState>(state), state.turn);
+        total += CountAllPawnQuiets(state, state.turn);
 
         Bitboard kings = state.pieces.Occupancy(state.turn, Piece::KING);
         while (kings) {
             uint8_t index = std::countr_zero(kings);
-            total += CountKingQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(attackTable), index);
+            total += CountKingQuiets(state, attackTable, index);
             kings &= (kings - 1);
         }
 
@@ -328,12 +328,12 @@ namespace movegen {
 
     std::size_t CountAllPawnAttacks(const BoardState& state, Color::Value color)
     {
-        return pawngen::attackCountFunctions[color](std::forward<const BoardState>(state));
+        return pawngen::attackCountFunctions[color](state);
     }
 
     std::size_t CountAllPawnQuiets(const BoardState& state, Color::Value color)
     {
-        return pawngen::quietCountFunctions[color](std::forward<const BoardState>(state));
+        return pawngen::quietCountFunctions[color](state);
     }
 
     std::size_t CountKnightAttacks(const BoardState& state, const AttackTable& attackTable, uint8_t index)

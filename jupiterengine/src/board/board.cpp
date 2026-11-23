@@ -5,53 +5,18 @@
 #include <string>
 
 #include "evaluation/evaluator.h"
-#include "util/fenParser.h"
 #include "libjupiter/board.h"
 #include "core.h"
 #include "util/exception.h"
 #include "util/instrumenter.h"
 #include "movegen/move.h"
-#include "zobrist.h"
 
 namespace libjupiter {
     Board::Board(const char *fen)
     {
         JUPITER_TRACE();
 
-        if (fen == nullptr)
-            StartPos();
-        else
-            fen::Parse(fen, &m_HalfMoves, &m_FullMoves, m_State);
-
-        m_State.pstScore = ComputePSTScore();
-        m_State.zobristKey = m_Zobrist.ComputeKey(m_State);
-        m_State.pawnKey = m_Zobrist.ComputePawnKey(m_State);
-
-        m_History.Push(m_State);
-    }
-
-    Board::~Board()
-    {
-        delete m_Searcher;
-    }
-
-    // Now doing incremental updates so need to initialise it
-    PSTScore Board::ComputePSTScore()
-    {
-        JUPITER_TRACE();
-
-        PSTScore score = PSTScore(0, 0);
-        for (Color::Value color : { Color::WHITE, Color::BLACK }) {
-            for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
-                Bitboard occupancy = m_State.pieces.Occupancy(color, piece);
-                while (occupancy) {
-                    uint8_t index = std::countr_zero(occupancy);
-                    score += m_PieceSquareTables.Get(color, piece, index);
-                    occupancy &= (occupancy - 1);
-                }
-            }
-        }
-        return score;
+        m_DTSManager = new DTSManager(fen ? fen : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     }
 
     void Board::SetTimeControl(float seconds, float increment)
@@ -156,17 +121,5 @@ namespace libjupiter {
                 ss << ". ";
         }
         result = ss.str();
-    }
-
-    void Board::StartPos()
-    {
-        JUPITER_TRACE();
-
-        m_State.pieces = BitboardSet();
-        m_State.rights = CastlingRight::All();
-        m_State.turn = Color::WHITE;
-        m_State.enPassantIndex = UINT8_MAX;
-        m_HalfMoves = 0;
-        m_FullMoves = 1;
     }
 }

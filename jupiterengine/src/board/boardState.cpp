@@ -12,7 +12,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
     JUPITER_TRACE();
 
 #ifdef DEBUG 
-    if (zobristKey != zobrist.ComputeKey(std::forward<const BoardState>(*this))) {
+    if (zobristKey != zobrist.ComputeKey(*this)) {
         ERROR("Zobrist mismatch at the top of make move: ");
         move.Show();
         pieces.Show();
@@ -170,7 +170,7 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
     halfMove++;
 
 #ifdef DEBUG
-    if (zobristKey != zobrist.ComputeKey(std::forward<const BoardState>(*this))) {
+    if (zobristKey != zobrist.ComputeKey(*this)) {
         ERROR("Zobrist mismatch at the bottom of make move: ");
         move.Show();
         pieces.Show();
@@ -251,13 +251,13 @@ bool BoardState::WasLegalMove(const AttackTable& attackTable, MoveData moveData)
 
     Bitboard king = pieces.Occupancy(moveData.turn, Piece::KING);
 
-    bool targetAttacked = attackTable.SquareUnderAttack(std::forward<const BoardState>(*this), king, Color::Opposite(moveData.turn));
+    bool targetAttacked = attackTable.SquareUnderAttack(*this, king, Color::Opposite(moveData.turn));
 
     // Check intermediate and start squares if castling
     if (moveData.move.piece == Piece::KING && Difference(moveData.move.from, moveData.move.to) == 2) {
-        bool startAttacked = attackTable.SquareUnderAttack(std::forward<const BoardState>(*this), 1ull << moveData.move.from, Color::Opposite(moveData.turn));
+        bool startAttacked = attackTable.SquareUnderAttack(*this, 1ull << moveData.move.from, Color::Opposite(moveData.turn));
         uint8_t midIndex = (moveData.move.from + moveData.move.to) / 2;
-        bool midAttacked = attackTable.SquareUnderAttack(std::forward<const BoardState>(*this), 1ull << midIndex, Color::Opposite(moveData.turn));
+        bool midAttacked = attackTable.SquareUnderAttack(*this, 1ull << midIndex, Color::Opposite(moveData.turn));
 
         return !targetAttacked && !startAttacked && !midAttacked;
     }
@@ -292,7 +292,7 @@ bool BoardState::KingUnderAttack(const AttackTable& attackTable, Color::Value tu
     JUPITER_TRACE();
 
     uint64_t kingBit = pieces.Occupancy(turn, Piece::KING);
-    return attackTable.SquareUnderAttack(std::forward<const BoardState>(*this), kingBit, Color::Opposite(turn));
+    return attackTable.SquareUnderAttack(*this, kingBit, Color::Opposite(turn));
 }
 
 bool BoardState::KingUnderAttack(const AttackTable& attackTable) const
@@ -300,6 +300,6 @@ bool BoardState::KingUnderAttack(const AttackTable& attackTable) const
     JUPITER_TRACE();
 
     uint64_t kingBit = pieces.Occupancy(turn, Piece::KING);
-    return attackTable.SquareUnderAttack(std::forward<const BoardState>(*this), kingBit, Color::Opposite(turn));
+    return attackTable.SquareUnderAttack(*this, kingBit, Color::Opposite(turn));
 }
 

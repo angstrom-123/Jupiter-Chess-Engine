@@ -499,7 +499,7 @@ void Searcher::TuneEval(const EvaluatorConstants& weights)
 {
     JUPITER_TRACE();
 
-    m_Eval.Tune(std::forward<const EvaluatorConstants&>(weights));
+    m_Eval.Tune(weights);
 }
 
 EvaluatorConstants Searcher::EvalWeights() const
@@ -578,7 +578,7 @@ Move Searcher::PickOpeningMove(const BoardState& state)
         return Move::Invalid();
 
     OpeningMoves moves;
-    if (!m_OpeningBook.LookupMoves(std::forward<const BoardState>(state), moves)) {
+    if (!m_OpeningBook.LookupMoves(state, moves)) {
         m_InOpeningBook = false;
         return Move::Invalid();
     }

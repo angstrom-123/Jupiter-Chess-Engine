@@ -142,7 +142,7 @@ int32_t Evaluator::KingMobility(const BoardState& state, const PositionData& dat
 
     // Imagine a friendly queen where the king is and see how much it can move
     AttackMoveBuffer attacks;
-    movegen::FindQueenAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable), kingIndex, attacks);
+    movegen::FindQueenAttacks(state, m_AttackTable, kingIndex, attacks);
 
     // Penalize excessive mobility (more than 3 squares)
     if (attacks.Size() > 3)
@@ -155,8 +155,8 @@ int32_t Evaluator::Mobility(const BoardState& state) const
 {
     JUPITER_TRACE();
 
-    std::size_t nAttacks = movegen::CountAllAttacks(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
-    std::size_t nQuiets = movegen::CountAllQuiets(std::forward<const BoardState>(state), std::forward<const AttackTable>(m_AttackTable));
+    std::size_t nAttacks = movegen::CountAllAttacks(state, m_AttackTable);
+    std::size_t nQuiets = movegen::CountAllQuiets(state, m_AttackTable);
     return (nAttacks + nQuiets) * m_Constants.mobilityFactor;
 }
 
