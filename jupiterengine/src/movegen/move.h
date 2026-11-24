@@ -22,10 +22,10 @@ union LongAlgebraicMove {
 
 union Move {
     struct {
-        uint8_t from{UINT8_MAX};
-        uint8_t to{UINT8_MAX};
-        Piece::Value piece{Piece::Invalid()};
-        Piece::Value promote{Piece::Invalid()};
+        uint8_t from;
+        uint8_t to;
+        Piece::Value piece;
+        Piece::Value promote;
     };
     uint32_t bits; // For comparisons, Pack() gives a smaller (18 bit) representation 
 
