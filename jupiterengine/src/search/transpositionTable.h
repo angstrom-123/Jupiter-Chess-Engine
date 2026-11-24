@@ -10,6 +10,10 @@
 constexpr uint64_t TRANSPOSITION_TABLE_KEY_BITS = 23; // 128 MiB
 constexpr std::size_t TRANSPOSITION_TABLE_SIZE = 1ull << TRANSPOSITION_TABLE_KEY_BITS;
 
+#if defined(_MSC_VER)
+    #include <intrin.h> // For _mm_prefetch
+#endif
+
 // Memory prefetch with funky fallback. I don't expect it to run, but it's there 
 // anyway.
 INLINE void Prefetch(const void * p)
@@ -17,7 +21,7 @@ INLINE void Prefetch(const void * p)
     #if defined(__GNUC__) || defined(__clang__)
         __builtin_prefetch(p, 0, 3);
     #elif defined(_MSC_VER)
-        _mm__prefetch(reinterpret_cast<const char *>(p), _MM_HINT_T0);
+        _mm_prefetch(reinterpret_cast<const char *>(p), _MM_HINT_T0);
     #else
         #warning Fallback prefetch used on this platform
         volatile const uint8_t *v = reinterpret_cast<volatile const uint8_t *>(p);
