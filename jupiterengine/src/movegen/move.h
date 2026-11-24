@@ -30,7 +30,7 @@ union Move {
     uint32_t bits; // For comparisons, Pack() gives a smaller (18 bit) representation 
 
     Move() = default;
-    Move(uint8_t from, uint8_t to, Piece::Value piece, Piece::Value promote = Piece::Invalid())
+    constexpr Move(uint8_t from, uint8_t to, Piece::Value piece, Piece::Value promote = Piece::Invalid())
         : from{from}, to{to}, piece{piece}, promote{promote} {}
 
     LongAlgebraicMove ToLAN() const;
@@ -53,7 +53,7 @@ union Move {
             && promote != Piece::PAWN 
             && (promote == Piece::Invalid() || piece == Piece::PAWN); 
     }
-    INLINE static constexpr Move Invalid() { return Move {}; }
+    INLINE static constexpr Move Invalid() { return Move{ UINT8_MAX, UINT8_MAX, Piece::Invalid(), Piece::Invalid() }; }
     INLINE static Move Unpack(uint32_t packed)
     {
         return Move(

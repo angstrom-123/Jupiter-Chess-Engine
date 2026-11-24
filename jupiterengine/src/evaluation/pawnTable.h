@@ -3,7 +3,7 @@
 #include "board/bitboard.h"
 #include "board/zobrist.h"
 
-constexpr uint64_t PAWN_TABLE_KEY_BITS = 16;
+constexpr uint64_t PAWN_TABLE_KEY_BITS = 17;
 constexpr std::size_t PAWN_TABLE_SIZE = 1ull << PAWN_TABLE_KEY_BITS;
 
 // Packs the indices of the furthest pushed pawn in each rank relative to color

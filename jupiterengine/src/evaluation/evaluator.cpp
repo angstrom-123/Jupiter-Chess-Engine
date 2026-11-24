@@ -34,18 +34,7 @@ int32_t Evaluator::Evaluate(const BoardState& state)
     if (IsMaterialDraw(data))
         return 0;
 
-    // Initial lazy evaluation (very fast to compute)
     int32_t eval = 0;
-
-    ComputeGamePhase(state, data);
-    eval += MaterialBalance(state, data);
-    eval += PiecePositions(state, data);
-
-    // TODO: This threshold should be roughly equivalent to maximum eval swing from the subsequent 
-    //       evaluation factors. I just magicified 1500 but it seems to improve the engine ¯\(ツ)/¯
-    constexpr int32_t LAZY_THRESHOLD = 1500;
-    if (std::abs(eval) >= LAZY_THRESHOLD)
-        return eval;
 
     // Probe the pawn hash table for a matching entry, or compute the structure ourselves
     PTEntry pte = m_PawnTable.Get(state.pawnKey);
@@ -61,6 +50,19 @@ int32_t Evaluator::Evaluate(const BoardState& state)
         m_PawnTable.Save(state.pawnKey, score, data.pawns);
         eval += score;
     }
+
+    // Initial lazy evaluation (very fast to compute)
+    ComputeGamePhase(state, data);
+    eval += MaterialBalance(state, data);
+    eval += PiecePositions(state, data);
+
+    // TODO: This threshold should be roughly equivalent to maximum eval swing from the subsequent 
+    //       evaluation factors. I just magicified 1500 but it seems to improve the engine ¯\(ツ)/¯
+
+    // TODO: Does this tank my pawn table hit rate???
+    constexpr int32_t LAZY_THRESHOLD = 1500;
+    if (std::abs(eval) >= LAZY_THRESHOLD)
+        return eval;
 
     FindKings(state, data);
     eval += Mobility(state);
