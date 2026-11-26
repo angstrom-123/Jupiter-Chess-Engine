@@ -1,141 +1,138 @@
 #!/usr/bin/env python3
 
 import json
-import time
-import sys
+import subprocess
+
+# Windows doesn't include readline in the stl
+try:
+    # Used to enable better navigation in the input prompt
+    import readline
+except ImportError:
+    pass
 
 from jupiterengine.build.libjupiter import Board
 
-def main():
-    if len(sys.argv) == 2:
-        match sys.argv[1]:
-            case "test":
-                test()
-            case "perft":
-                perft()
-            case "stress":
-                stress()
-            case "bench":
-                benchmark()
-            case _:
-                help()
+class Command:
+    def __init__(self, name, proc):
+        self.name = name
+        self.proc = proc
 
-    elif len(sys.argv) == 1:
-        while 1:
-            command: str = str(input("> "))
-            match command:
-                case "test":
-                    test()
-                case "perft":
-                    perft()
-                case "stress":
-                    stress()
-                case "bench":
-                    benchmark()
-                case "quit":
-                    break
-                case _:
-                    help()
+commands: list[Command] = []
+board: Board = Board()
 
-def help():
+def help_command(_):
     print("""
-JUPITER DEBUG SCRIPT
-
 Commands:
-    help 
-    quit 
-    test 
-    bench 
-    perft
-    stress
+    help
+    quit
+    show
+    position [fen | 'startpos' | 'kiwipete']
+    moves [lan] ...
+    go [ms]
+    profile
+    perft [depth]
+    metrics
 """)
 
-def benchmark():
-    board = Board("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
+def quit_command(_):
+    exit(0)
 
-    n_tests = 10
-    total_nodes = 0.0
-    total_time = 0.0
-    total_depth = 0
-
-    for i in range(n_tests):
-        move = board.go(60_000)
-        if move is None:
-            raise RuntimeError("go call returned None")
-        board.make_move(move)
-
-        telem = json.loads(board.get_telemetry())
-        total_nodes += telem["nodesSearched"]
-        total_time += telem["searchTime"]
-        total_depth += telem["depth"]
-
-        print(f"({i}/{n_tests})", end="\r")
-
-    print(f"Average search speed ({n_tests} iterations): {total_nodes / (total_time * 1000.0):.3f}mnps")
-    print(f"Average search depth: {total_depth / n_tests:.3f}")
-
-def stress():
-    board = Board("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
-    time.sleep(1)
-    board.go(100_000)
-    telem = json.loads(board.get_telemetry())
-    n = telem["nodesSearched"]
-    t = telem["searchTime"]
-    print(f"Searched {n / 1_000_000:.3f}M nodes in {t}s ({n / (t * 1000.0):.3f}mnps")
-
-def test():
-    fen = "1K6/5q2/8/7p/7P/5k2/2n5/8 w - - 0 1"
-
-    board = Board(fen)
+def show_command(_):
     print(repr(board))
 
-    move = board.go(1000)
-    print(move)
+def position_command(args):
+    global board
+    try:
+        fen: str = ""
+        if args[0] == "startpos":
+            fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        elif args[0] == "kiwipete":
+            fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+        elif len(args) == 6:
+            fen = f"{args[0]} {args[1]} {args[2]} {args[3]} {args[4]} {args[5]}"
+        else:
+            raise ValueError()
+        board = Board(fen)
+    except:
+        print("[ERROR] Bad args to position command.")
 
-    if move is None:
-        return
+def moves_command(args):
+    global board 
+    try:
+        for lan in args:
+            board.make_move(lan)
+    except:
+        print("[ERROR] Bad args to moves command, board corrupted.")
 
-    board.make_move(move)
-    print(repr(board))
+def go_command(args):
+    global board 
+    try:
+        lan = board.go(int(args[0]))
+        if lan is None:
+            print("[RESULT] No moves")
+        else:
+            telem = json.loads(board.get_telemetry()) # Not working?
+            print(f"[RESULT] {lan}")
 
+            n = telem["nodesSearched"]
+            if n > 0:
+                t = telem["searchTime"]
+                d = telem["depth"]
 
-def perft():
-    perft = [
-        # Startpos
-        ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 1, 20),
-        ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 2, 400),
-        ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 3, 8902),
-        ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 4, 197281),
-        ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, 4865609),
-        ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, 119060324),
-        # ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 7, 3195901860),
-        # ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 8, 84998978956),
-        # ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 9, 2439530234167),
+                print(f"[INFO] Searched {n / 1_000_000:.3f}M nodes in {t}s ({n / (t * 1000.0):.3f}mnps) reaching depth {int(d)}")
+            else:
+                print("[INFO] No search performed; in opening book.")
+    except:
+        print("[ERROR] Bad args to go command.")
 
-        # Kiwipete
-        ("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 1, 48),
-        ("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 2, 2039),
-        ("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 3, 97862),
-        ("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4, 4085603),
-        ("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 5, 193690690),
-        # ("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 6, 8031647685),
-        # ("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 7, 374190009323),
-    ]
+def profile_command(_):
+    print("[WARNING] Local board is not used for profiling.")
+    print("[WARNING] Not working on Windows.")
+    try:
+        subprocess.run("sudo perf record -F 20000 -g --call-graph dwarf -e cycles:pp --delay=1000 -- python3 profile.py && sudo perf report --dso=libjupiter.so", shell=True)
+    except:
+        print("[ERROR] Failed to run profile command.")
 
-    for (pos, depth, expected) in perft:
-        board: Board = Board(pos)
+def perft_command(args):
+    global board 
+    try:
+        n, div = board.perft_divide(int(args[0]))
+        for k, v in div.items():
+            print(f"  {k}: {v}")
+        print(f"[RESULT] {n}")
+    except Exception as e:
+        print(e)
+        print("[ERROR] Bad args to perft command.")
 
-        start = time.perf_counter()
+def metrics_command(_):
+    try:
+        m = board.get_metrics()
+        for k, v in m:
+            print(f"{k}: {v}")
+    except:
+        print("[ERROR] Failed to run metrics command.")
 
-        n, div = board.perft_divide(depth)
+def init_commands():
+    commands.append(Command("help",     help_command))
+    commands.append(Command("quit",     quit_command))
+    commands.append(Command("show",     show_command))
+    commands.append(Command("position", position_command))
+    commands.append(Command("moves",    moves_command))
+    commands.append(Command("go",       go_command))
+    commands.append(Command("profile",  profile_command))
+    commands.append(Command("perft",    perft_command))
+    commands.append(Command("metrics",  metrics_command))
 
-        end = time.perf_counter()
+def do_command(command):
+    words = command.split(" ")
+    for cmd in commands:
+        if cmd.name == words[0]:
+            cmd.proc(words[1:])
 
-        print(f"Finished perft run in {end - start:.2f}s ({(n / 1000000) / (end - start)}mnps)")
-        print(f"Perft({depth}) on '{pos}' gave {n} moves")
-        print(f"    Expected: {expected}")
-        print(f"    Ok?: {'true' if n == expected else 'false'}")
+def main():
+    init_commands()
+    while 1:
+        do_command(str(input("> ")))
 
 if __name__ == "__main__":
     main()
-
