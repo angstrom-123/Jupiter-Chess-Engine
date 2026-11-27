@@ -15,12 +15,13 @@ public:
     {
         std::memcpy(m_Data, other.m_Data, capacity * sizeof(T));
     }
-    void operator=(const CircularStack<T, capacity>& other) noexcept
+    CircularStack<T, capacity>& operator=(const CircularStack<T, capacity>& other) noexcept
     {
         m_Size = other.m_Size;
         m_Top = other.m_Top;
         m_Bottom = other.m_Bottom;
         std::memcpy(m_Data, other.m_Data, capacity * sizeof(T));
+        return *this;
     }
     void Push(T&& value)
     {

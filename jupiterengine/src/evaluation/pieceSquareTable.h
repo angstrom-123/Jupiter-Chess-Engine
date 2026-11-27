@@ -1,8 +1,8 @@
 #pragma once
 
+#include "board/bitboard.h"
 #include "core.h"
 #include "util/instrumenter.h"
-#include "util/log.h"
 #include <csignal>
 #include <cstdint>
 
@@ -11,8 +11,16 @@ struct PSTScore {
     int16_t endgame{0};
 
     PSTScore() = default;
+    PSTScore(const PSTScore& other)
+        : midgame{other.midgame}, endgame{other.endgame} {}
     PSTScore(int16_t midgame, int16_t endgame)
         : midgame{midgame}, endgame{endgame} {}
+    PSTScore& operator=(const PSTScore& other) noexcept 
+    {
+        midgame = other.midgame;
+        endgame = other.endgame;
+        return *this;
+    }
 
     PSTScore& operator-=(const PSTScore& other) 
     {
@@ -48,6 +56,8 @@ public:
 
         return m_Tables[piece][index];
     }
+
+    PSTScore ComputeScore(const BitboardSet& pieces) const;
 
 private:
     PSTScore m_Tables[Piece::MAX_ENUM][64];

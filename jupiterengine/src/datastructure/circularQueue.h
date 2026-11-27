@@ -18,12 +18,13 @@ public:
     {
         std::memcpy(m_Data, other.m_Data, capacity * sizeof(T));
     }
-    void operator=(const CircularQueue<T, capacity>& other) noexcept
+    CircularQueue<T, capacity>& operator=(const CircularQueue<T, capacity>& other) noexcept
     {
         m_Top = other.m_Top;
         m_Bottom = other.m_Bottom;
         m_Size = other.m_Size;
         std::memcpy(m_Data, other.m_Data, capacity * sizeof(T));
+        return *this;
     }
     void Push(const T& value)
     {
@@ -68,8 +69,8 @@ public:
             ERROR("Underflowing circular queue.");
         #endif
 
-        m_Top = (m_Top + capacity - 1) % capacity;
-        m_Data[m_Top].~T();
+        m_Data[m_Bottom].~T();
+        m_Bottom = (m_Bottom + 1) % capacity;
         m_Size--;
     }
     const T& Peek() const
@@ -78,7 +79,7 @@ public:
         if (m_Size == 0)
             ERROR("Nothing to peek in circular queue.");
         #endif
-        return m_Data[(m_Top + capacity - 1) % capacity];
+        return m_Data[m_Bottom];
     }
     std::size_t Size() const 
     {

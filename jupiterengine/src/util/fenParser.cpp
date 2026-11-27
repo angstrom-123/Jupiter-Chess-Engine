@@ -62,6 +62,8 @@ namespace fen {
 
     void Parse(const char *_Nonnull fen, uint64_t *_Nullable halfMoveRes, uint64_t *_Nullable fullMoveRes, BoardState& res)
     {
+        JUPITER_TRACE();
+
         uint64_t length = std::strlen(fen);
 
         // Split at delimiters and initial validation

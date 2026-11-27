@@ -81,7 +81,7 @@ public:
     uint64_t GetEvaluationCount() const { return m_Evaluations; }
     uint64_t GetPawnTableHitCount() const { return m_PawnTableHits; }
     uint64_t GetPawnTableSize() const { return m_PawnTable.OccupancyBytes(); }
-    void Tune(const EvaluatorConstants& weights) { m_Constants = weights; }
+    void SetWeights(const EvaluatorConstants& weights) { m_Constants = weights; }
     EvaluatorConstants GetWeights() const { return m_Constants; }
 
 private:
@@ -109,13 +109,8 @@ private:
 
     uint64_t m_PawnTableHits{0};
     uint64_t m_Evaluations{0};
-
-    // TODO: The pawn table will be per thread, each thread gets their own evaluator.
-    //       The lookup tables (distance, mask) should be centralised and passed around I think.
-    //       Maybe they will play better with cache if I make them per-thread, but this will have 
-    //       to be tested. The members are labelled below that I think should move out.
     PawnTable m_PawnTable{PawnTable()};
     const AttackTable &m_AttackTable;
-    DistanceTable m_DistanceTable{DistanceTable()}; // TODO: This one moves out
-    MaskTable m_MaskTable{MaskTable()};             // TODO: This one moves out
+    DistanceTable m_DistanceTable{DistanceTable()};
+    MaskTable m_MaskTable{MaskTable()};
 };

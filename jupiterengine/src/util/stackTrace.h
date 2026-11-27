@@ -75,16 +75,11 @@ public:
     static void PrintAllTraces()
     {
         for (std::size_t i = 0; i < MAX_TRACED_THREADS; i++) {
-            WARN("\n\n=== C++ Stack Trace (thread " << i << ") ===\n");
-
             CallStack *stack = g_CallStackRegistry[i].load(std::memory_order_acquire);
-            if (stack == nullptr)
+            if (stack == nullptr || stack->frames.Size() == 0)
                 continue;
 
-            if (stack->frames.Size() == 0) {
-                WARN("  [EMPTY]");
-                return;
-            }
+            WARN("\n\n=== C++ Stack Trace (thread " << i << ") ===\n");
 
             std::size_t count = std::min(MAX_STACK_FRAMES, stack->frames.Size());
             for (std::size_t i = 0; i < count; i++) {

@@ -24,26 +24,26 @@ class Searcher {
 public:
     Searcher(Zobrist& zobrist, PieceSquareTables& pieceSquareTables);
     Move FindBest(BoardState& state, History& history, uint64_t remainingMs);
-	uint64_t Perft(BoardState& state, uint8_t depth);
-	uint64_t PerftDivide(BoardState& state, uint8_t depth, PerftBuffer& buffer);
+	uint64_t Perft(BoardState& state, uint16_t depth);
+	uint64_t PerftDivide(BoardState& state, uint16_t depth, PerftBuffer& buffer);
     void SetTimeControl(float seconds, float increment);
     void TelemetryJSON(std::string& result) const;
     void MetricsJSON(std::string& result) const;
-    void TuneEval(const EvaluatorConstants& weights);
-    EvaluatorConstants EvalWeights() const;
+    void SetWeights(const EvaluatorConstants& weights);
+    EvaluatorConstants GetWeights() const;
 
 private:
-	uint64_t PerftRecurse(BoardState& state, uint8_t depth);
-    void SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv);
+	uint64_t PerftRecurse(BoardState& state, uint16_t depth);
+    void SavePrincipalVariation(BoardState& state, Move firstMove, uint16_t depth, LineBuffer& pv);
     void CalculateSearchTime(uint64_t remainingMs);
     int16_t CalculateExtension(const BoardState& state, const MoveStream& movegen);
     Move PickOpeningMove(const BoardState& state);
-    int32_t Search(BoardState& state, History& history, AlphaBeta window, int16_t depthUnits, uint8_t ply);
-    int32_t Quiesce(BoardState& state, History& history, AlphaBeta window, uint8_t ply);
+    int32_t Search(BoardState& state, History& history, AlphaBeta window, int16_t depthUnits, uint16_t ply);
+    int32_t Quiesce(BoardState& state, History& history, AlphaBeta window, uint16_t ply);
     int32_t PrincipalVariationSearch(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, int16_t depthUnits, uint8_t nextPly);
     int32_t PrincipalVariationQuiesce(BoardState& state, History& history, const MoveStream& movegen, AlphaBeta window, uint8_t nextPly);
-    void UpdateHistory(const BoardState& state, Move move, uint8_t depth);
-    void UpdateKillers(Move move, uint8_t ply);
+    void UpdateHistory(const BoardState& state, Move move, uint16_t depth);
+    void UpdateKillers(Move move, uint16_t ply);
     void Reset();
 
 private:
@@ -51,8 +51,8 @@ private:
     uint8_t m_BookMoves{0};
 
     // Telemetry
-    // TODO: Make these all atomic if multithreading
-    uint8_t m_LastSearchDepth{0};
+    // TODO: Make these all atomic if multithreading?
+    uint64_t m_LastSearchDepth{0};
     uint64_t m_LastNodesSearched{0};
     uint64_t m_LastNodesLookedUp{0};
     uint64_t m_LastNodesQuiesced{0};

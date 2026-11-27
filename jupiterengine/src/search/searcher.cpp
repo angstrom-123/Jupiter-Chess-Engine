@@ -144,7 +144,7 @@ Move Searcher::FindBest(BoardState& state, History& history, uint64_t remainingM
     return finalMove;
 }
 
-uint64_t Searcher::Perft(BoardState& state, uint8_t depth)
+uint64_t Searcher::Perft(BoardState& state, uint16_t depth)
 {
 	JUPITER_TRACE();
 
@@ -154,7 +154,7 @@ uint64_t Searcher::Perft(BoardState& state, uint8_t depth)
 	return PerftRecurse(state, depth);
 }
 
-uint64_t Searcher::PerftDivide(BoardState& state, uint8_t depth, PerftBuffer& buffer)
+uint64_t Searcher::PerftDivide(BoardState& state, uint16_t depth, PerftBuffer& buffer)
 {
 	JUPITER_TRACE();
 
@@ -197,7 +197,7 @@ uint64_t Searcher::PerftDivide(BoardState& state, uint8_t depth, PerftBuffer& bu
 }
 
 
-uint64_t Searcher::PerftRecurse(BoardState& state, uint8_t depth)
+uint64_t Searcher::PerftRecurse(BoardState& state, uint16_t depth)
 {
 	JUPITER_TRACE();
 
@@ -227,7 +227,7 @@ uint64_t Searcher::PerftRecurse(BoardState& state, uint8_t depth)
 	return count;
 }
 
-int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, int16_t depthUnits, uint8_t ply)
+int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, int16_t depthUnits, uint16_t ply)
 {
     JUPITER_TRACE();
 
@@ -335,7 +335,7 @@ int32_t Searcher::Search(BoardState& state, History& history, AlphaBeta window, 
     return bestScore;
 }
 
-int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window, uint8_t ply)
+int32_t Searcher::Quiesce(BoardState& state, History& history, AlphaBeta window, uint16_t ply)
 {
     JUPITER_TRACE();
 
@@ -468,7 +468,7 @@ void Searcher::TelemetryJSON(std::string& result) const
     std::ostringstream ss;
 
     ss << "{"
-        << "\"depth\":" << (int) m_LastSearchDepth << ","
+        << "\"depth\":" << m_LastSearchDepth << ","
         << "\"nodesSearched\":" << m_LastNodesSearched << ","
         << "\"nodesLookedUp\":" << m_LastNodesLookedUp << ","
         << "\"nodesQuiesced\":" << m_LastNodesQuiesced << ","
@@ -495,21 +495,21 @@ void Searcher::MetricsJSON(std::string& result) const
     result = ss.str();
 }
 
-void Searcher::TuneEval(const EvaluatorConstants& weights)
+void Searcher::SetWeights(const EvaluatorConstants& weights)
 {
     JUPITER_TRACE();
 
-    m_Eval.Tune(weights);
+    m_Eval.SetWeights(weights);
 }
 
-EvaluatorConstants Searcher::EvalWeights() const
+EvaluatorConstants Searcher::GetWeights() const
 {
     JUPITER_TRACE();
 
     return m_Eval.GetWeights();
 }
 
-void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint8_t depth, LineBuffer& pv)
+void Searcher::SavePrincipalVariation(BoardState& state, Move firstMove, uint16_t depth, LineBuffer& pv)
 {
     JUPITER_TRACE();
 
@@ -587,14 +587,14 @@ Move Searcher::PickOpeningMove(const BoardState& state)
     return moves[m_FastRNG.Generate() % moves.Size()].first;
 }
 
-void Searcher::UpdateHistory(const BoardState& state, Move move, uint8_t depth)
+void Searcher::UpdateHistory(const BoardState& state, Move move, uint16_t depth)
 {
     int16_t clamped = std::min(static_cast<int16_t>(depth * depth), MAX_HISTORY);
     int16_t entry = m_HistoryTable[state.turn][move.from][move.to];
     m_HistoryTable[state.turn][move.from][move.to] += clamped - (entry * clamped / MAX_HISTORY);
 }
 
-void Searcher::UpdateKillers(Move move, uint8_t ply)
+void Searcher::UpdateKillers(Move move, uint16_t ply)
 {
     if (ply < MAX_PLY && !m_Killers[ply].Contains(move))
         m_Killers[ply].Push(move);

@@ -7,7 +7,7 @@
 #include <cstdint>
 
 // Not quite the theoretical maximums but I don't anticipate this becoming a problem
-const uint8_t MAX_PLY = 32;
+const uint16_t MAX_PLY = 32;
 const uint64_t MAX_KILLERS = 2;
 
 const int16_t MAX_HISTORY = INT16_MAX;

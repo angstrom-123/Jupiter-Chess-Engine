@@ -8,110 +8,92 @@
 #include "libjupiter/board.h"
 #include "core.h"
 #include "util/exception.h"
+#include "util/fenParser.h"
 #include "util/instrumenter.h"
 #include "movegen/move.h"
 #include "zobrist.h"
 
 namespace libjupiter {
-    Board::Board(const char *fen)
+    Board::Board(const char *_Nullable fen)
     {
         JUPITER_TRACE();
 
-        m_DTSManager = new DTSManager(fen ? fen : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        m_DTSManager = new DTSManager();
+        fen::Parse(fen ? fen : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", nullptr, nullptr, m_DTSManager->state);
     }
 
     Board::~Board()
     {
+        INFO("Cleaning up board");
         delete m_DTSManager;
+        INFO("Clean up done");
     }
 
     void Board::SetTimeControl(float seconds, float increment)
     {
         JUPITER_TRACE();
 
-        m_DTSManager->SetTimeControl(seconds, increment);
+        m_DTSManager->tcSeconds = seconds;
+        m_DTSManager-> tcIncrement = increment;
     }
 
     Move Board::Go(uint64_t moveMs)
     {
         JUPITER_TRACE();
 
-	return m_DTSManager->FindBest(moveMs);
+        return m_DTSManager->FindBest(moveMs);
     }
 
     void Board::MakeMove(LongAlgebraicMove lan)
     {
         JUPITER_TRACE();
 
-        Move move = Move::FromLAN(lan, m_DTSManager->State().pieces);
+        Move move = Move::FromLAN(lan, m_DTSManager->state.pieces);
         if (!move.IsValid())
             throw JupiterException(std::string("Malformed LAN string: '") + lan.chars + "'");
 
-        m_DTSManager->MakeMove(move);
+        m_DTSManager->state.MakeMoveNoIncremental(move);
     }
 
     void Board::SetWeights(const EvaluatorConstants& weights)
     {
         JUPITER_TRACE();
 
-        m_DTSManager->SetWeights(weights);
+        m_DTSManager->weights = weights;
     }
 
     EvaluatorConstants Board::GetWeights() const
     {
         JUPITER_TRACE();
 
-        // return m_Searcher->EvalWeights();
-        // TODO
+        return m_DTSManager->weights;
     }
 
     void Board::GetTelemetry(std::string& result) const
     {
         JUPITER_TRACE();
 
-        // m_Searcher->TelemetryJSON(result);
-        // TODO
+        m_DTSManager->TelemetryJSON(result);
     }
 
     void Board::GetMetrics(std::string& result) const
     {
         JUPITER_TRACE();
 
-        // m_Searcher->MetricsJSON(result);
-        // TODO
+        m_DTSManager->MetricsJSON(result);
     }
-
-	uint64_t Board::Perft(uint8_t depth)
-	{
-		JUPITER_TRACE();
-
-		// return m_Searcher->Perft(m_State, depth);
-        // TODO
-        return 0;
-	}
-
-	uint64_t Board::PerftDivide(uint8_t depth, PerftBuffer& buffer)
-	{
-		JUPITER_TRACE();
-
-		// return m_Searcher->PerftDivide(m_State, depth, buffer);
-        // TODO
-        return 0;
-	}
 
     void Board::Show(std::string& result) const
     {
         JUPITER_TRACE();
 
-        const BoardState state = m_DTSManager->State();
-
         std::ostringstream ss;
-        ss << (state.turn == Color::BLACK ? "Black" : "White") << " to move" << std::endl
+        ss << (m_DTSManager->state.turn == Color::BLACK ? "Black" : "White") << " to move" << std::endl
             << "Castling rights: " << std::endl
-            << "    White long: " << ((state.rights & CastlingRight::QUEENSIDE_WHITE) ? "true" : "false")
-            << ", short: " << ((state.rights & CastlingRight::KINGSIDE_WHITE) ? "true" : "false") << std::endl
-            << "    Black long: " << ((state.rights & CastlingRight::QUEENSIDE_BLACK) ? "true" : "false")
-            << ", short: " << ((state.rights & CastlingRight::KINGSIDE_BLACK) ? "true" : "false") << std::endl
+            << "    White long: " << ((m_DTSManager->state.rights & CastlingRight::QUEENSIDE_WHITE) ? "true" : "false")
+            << ", short: " << ((m_DTSManager->state.rights & CastlingRight::KINGSIDE_WHITE) ? "true" : "false") << std::endl
+            << "    Black long: " << ((m_DTSManager->state.rights & CastlingRight::QUEENSIDE_BLACK) ? "true" : "false")
+            << ", short: " << ((m_DTSManager->state.rights & CastlingRight::KINGSIDE_BLACK) ? "true" : "false") << std::endl
             << "Board: ";
 
         const char symbols[Color::MAX_ENUM][Piece::MAX_ENUM] = {
@@ -123,7 +105,7 @@ namespace libjupiter {
             if (i % 8 == 0)
                 ss << std::endl << "    ";
             
-            const auto [color, piece] = state.pieces.PieceInSquare(i);
+            const auto [color, piece] = m_DTSManager->state.pieces.PieceInSquare(i);
             if (Color::IsValid(color) && Piece::IsValid(piece))
                 ss << symbols[color][piece] << ' ';
             else

@@ -4,46 +4,54 @@
 #include "dts/messageQueue.h"
 #include "dts/treeState.h"
 #include "dts/types.h"
-#include "search/searcher.h"
+#include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <thread>
 
-const std::size_t DTS_MAX_THREADS = 8;
-
-// TODO: Give each worker access to the searcher, etc
-//          - Maybe just pass it in?
-
-// TODO: Move the non-shared stuff out of the searcher and into the workers
-
-// TODO: How will the workers all use the shared resources on the searcher?
+// const std::size_t DTS_MAX_THREADS = 8;
+// TODO: Increase this again
+const std::size_t DTS_MAX_THREADS = 1;
 
 class DTSManager {
 public:
-    DTSManager(const char *fen);
+    DTSManager();
     ~DTSManager();
 
+    // External API
     Move FindBest(uint64_t msLeft);
-    void MakeMove(Move move);
-    BoardState State() { return m_State; }
-    
-    // Configuration
-    void SetTimeControl(float seconds, float increment);
-    void SetWeights(const EvaluatorConstants& weights);
+    void TelemetryJSON(std::string& result) const;
+    void MetricsJSON(std::string& result) const;
 
     // Inter-thread communication
-    bool HasMessage(ThreadId me);
-    Message ReadMessage(ThreadId me);
-    void SendMessage(Command::Value command, ThreadId me);
-    void SendMessageTo(Command::Value command, ThreadId me, ThreadId to);
+    Message WorkerReadMessage(ThreadId me);
+    bool WorkerShouldStop(ThreadId me);
+    void WorkerSetSearchComplete();
+    void WorkerUpdateBestMove(Move move);
+    void WorkerSendMessage(Command::Value command, ThreadId me);
+    void WorkerSendMessageTo(Command::Value command, ThreadId me, ThreadId to);
+
+public:
+    // For initialising threads and interfacing with the board
+    BoardState state{};
+    float tcSeconds{0};
+    float tcIncrement{0};
+    EvaluatorConstants weights{EvaluatorConstants::Tuned()};
 
 private:
-    Zobrist m_Zobrist{};
-    PieceSquareTables m_PieceSquareTables{};
-    Searcher m_Searcher{m_Zobrist, m_PieceSquareTables};
-    BoardState m_State{};
+    void SendMessage(Message message);
 
-    std::condition_variable m_Condition{};
-    bool m_Stopping{false};
+private:
+    // The search done boolean is set to true by the workers if they have finished processing. That 
+    // is protected by this mutex. The main thread waits on this condition variable until either the 
+    // search is done or the maximum search time is reached. In case of timeout (where search done 
+    // is false), a boolean flag is set telling all workers to terminate.
+    bool m_SearchDone;
+    std::mutex m_SearchDoneMutex;
+    std::condition_variable m_SearchDoneCondition;
+
+    std::atomic<bool> m_StopRequested;  // For telling the workers to abort
+    std::atomic<uint32_t> m_BestMove;  
 
     Buffer<std::thread, DTS_MAX_THREADS> m_Threads;
     Buffer<MessageQueue *, DTS_MAX_THREADS> m_Queues;   // Each thread's message queue for comms

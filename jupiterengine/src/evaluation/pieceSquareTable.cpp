@@ -1,4 +1,5 @@
 #include "pieceSquareTable.h"
+#include "board/bitboard.h"
 #include "util/instrumenter.h"
 
 PieceSquareTables::PieceSquareTables()
@@ -148,4 +149,20 @@ PieceSquareTables::PieceSquareTables()
         for (std::size_t i = 0; i < 64; i++)
             m_Tables[piece][i] = PSTScore(ROFCHADE_TABLES[piece][0][i], ROFCHADE_TABLES[piece][1][i]);
     }
+}
+
+PSTScore PieceSquareTables::ComputeScore(const BitboardSet& pieces) const 
+{
+    PSTScore score = PSTScore(0, 0);
+    for (Color::Value color : { Color::WHITE, Color::BLACK }) {
+        for (Piece::Value piece = Piece::PAWN; piece < Piece::MAX_ENUM; piece++) {
+            Bitboard occupancy = pieces.Occupancy(color, piece);
+            while (occupancy) {
+                uint8_t index = std::countr_zero(occupancy);
+                score += Get(color, piece, index);
+                occupancy &= (occupancy - 1);
+            }
+        }
+    }
+    return score;
 }

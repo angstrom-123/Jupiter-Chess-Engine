@@ -3,22 +3,23 @@
 #include "movegen/move.h"
 #include "util/instrumenter.h"
 
-#ifdef DEBUG
-    #include "util/exception.h"
-#endif
+BoardState& BoardState::operator=(const BoardState& other) noexcept
+{
+    pieces = other.pieces;
+    zobristKey = other.zobristKey;
+    pawnKey = other.pawnKey;
+    pstScore = other.pstScore;
+    rights = other.rights;
+    turn = other.turn;
+    enPassantIndex = other.enPassantIndex;
+    fiftyMoveCounter = other.fiftyMoveCounter;
+    halfMove = other.halfMove;
+    return *this;
+}
 
 MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& pst, Move move)
 {
     JUPITER_TRACE();
-
-#ifdef DEBUG 
-    if (zobristKey != zobrist.ComputeKey(*this)) {
-        ERROR("Zobrist mismatch at the top of make move: ");
-        move.Show();
-        pieces.Show();
-        throw JupiterException("Zobrist mismatch");
-    }
-#endif
 
     Color::Value friendly = turn;
     Color::Value enemy = Color::Opposite(turn);
@@ -130,8 +131,8 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
 					}
                 } else if (move.to == queensideRookSquare[enemy]) {
 					if (rights & enemyQueenside) {
-						rights &= ~CastlingRight::Queenside(enemy);
 						zobristKey ^= zobrist.ValueForRights(CastlingRight::Queenside(enemy));
+						rights &= ~CastlingRight::Queenside(enemy);
 					}
                 }
             }
@@ -160,33 +161,120 @@ MoveData BoardState::MakeMove(const Zobrist& zobrist, const PieceSquareTables& p
     }
 
     // Update 50 move counter
-    if (Piece::IsValid(capture) || move.piece == Piece::PAWN)
+    if (Piece::IsValid(capture) || move.piece == Piece::PAWN) {
         fiftyMoveCounter = 0;
-    else
+    } else {
         fiftyMoveCounter++;
+    }
 
     turn = enemy;
     zobristKey ^= zobrist.ValueForTurn();
     halfMove++;
 
-#ifdef DEBUG
-    if (zobristKey != zobrist.ComputeKey(*this)) {
-        ERROR("Zobrist mismatch at the bottom of make move: ");
-        move.Show();
-        pieces.Show();
-        __builtin_dump_struct(this, printf);
-        throw JupiterException("Zobrist mismatch");
-    }
-
-    if (pieces.Occupancy(friendly, Piece::KING) == 0 || pieces.Occupancy(enemy, Piece::KING) == 0) {
-        ERROR("Missing king after making move: ");
-        move.Show();
-        pieces.Show();
-        throw JupiterException("King missing");
-    }
-#endif
-
     return moveData;
+}
+
+void BoardState::MakeMoveNoIncremental(Move move)
+{
+    JUPITER_TRACE();
+
+    Color::Value friendly = turn;
+    Color::Value enemy = Color::Opposite(turn);
+    Piece::Value capture = pieces.PieceInSquare(enemy, move.to);
+
+    // Move piece
+    pieces.Unset(friendly, move.piece, move.from);
+    if (Piece::IsValid(move.promote))
+        pieces.Set(friendly, move.promote, move.to);
+    else
+        pieces.Set(friendly, move.piece, move.to);
+
+    // Remove capture
+    if (Piece::IsValid(capture))
+        pieces.Unset(enemy, capture, move.to);
+
+    // Move rook if castling
+    if (move.piece == Piece::KING) {
+        if (move.from - move.to == 2) { // Condition holds even with underflow
+            pieces.Unset(friendly, Piece::ROOK, move.from - 4);
+            pieces.Set(friendly, Piece::ROOK, move.from - 1);
+        } else if (move.to - move.from == 2) { // Condition holds even with underflow
+            pieces.Unset(friendly, Piece::ROOK, move.from + 3);
+            pieces.Set(friendly, Piece::ROOK, move.from + 1);
+        }
+    }
+
+    // Remove pawn if en passant
+    const int8_t enPassantOffset[Color::MAX_ENUM] = { +8, -8 };
+    if (move.piece == Piece::PAWN && move.to == enPassantIndex) {
+        uint8_t pawnIndex = move.to + enPassantOffset[friendly];
+        pieces.Unset(enemy, Piece::PAWN, pawnIndex);
+    }
+
+    // Avoid updating castling rights after both sides lose the right
+    if (rights > 0) {
+        // Remove castling rights if king moved
+		CastlingRights kingside = CastlingRight::Kingside(friendly);
+		CastlingRights queenside = CastlingRight::Queenside(friendly);
+        if (move.piece == Piece::KING) {
+            rights &= ~(kingside | queenside);
+        } else {
+            const uint8_t kingsideRookSquare[Color::MAX_ENUM] = { 63, 7 };
+            const uint8_t queensideRookSquare[Color::MAX_ENUM] = { 56, 0 };
+
+            // Remove castling rights if rook moved from start square
+            if (move.piece == Piece::ROOK) {
+                if (move.from == kingsideRookSquare[friendly] && (rights & kingside)) {
+					rights &= ~kingside;
+                } else if (move.from == queensideRookSquare[friendly] && (rights & queenside)) {
+					rights &= ~queenside;
+                }
+            }
+
+            // Remove castling rights if rook captured on start square
+            if (capture == Piece::ROOK) {
+				CastlingRights enemyKingside = CastlingRight::Kingside(enemy);
+				CastlingRights enemyQueenside = CastlingRight::Queenside(enemy);
+
+                if (move.to == kingsideRookSquare[enemy]) {
+					if (rights & enemyKingside) {
+						rights &= ~CastlingRight::Kingside(enemy);
+					}
+                } else if (move.to == queensideRookSquare[enemy]) {
+					if (rights & enemyQueenside) {
+						rights &= ~CastlingRight::Queenside(enemy);
+					}
+                }
+            }
+        }
+    }
+
+    // Update en passant square if double pawn push
+    enPassantIndex = UINT8_MAX;
+    if (move.piece == Piece::PAWN && Difference(move.from, move.to) == 16) {
+        // Check if any of our pawns can en passant the opponent pawn that just double pushed
+        // This means that two identical positions (except for the en passant square) will hash to 
+        // the same value as long as there is no pawn to capture en passant.
+        // This check only accounts for pseudo-legal en passant captures but is better than nothing.
+        uint8_t enPassantIndex = move.to + enPassantOffset[friendly];
+        uint8_t file = enPassantIndex & 7;
+        uint64_t adjacentMask = 0;
+        if (file > 0) adjacentMask |= (1ull << (move.to - 1));
+        if (file < 7) adjacentMask |= (1ull << (move.to + 1));
+        if (adjacentMask & pieces.Occupancy(enemy, Piece::PAWN)) {
+            this->enPassantIndex = enPassantIndex;
+        }
+    }
+
+    // Update 50 move counter
+    if (Piece::IsValid(capture) || move.piece == Piece::PAWN) {
+        fiftyMoveCounter = 0;
+    } else {
+        fiftyMoveCounter++;
+    }
+
+    turn = enemy;
+    halfMove++;
 }
 
 void BoardState::UnmakeMove(MoveData moveData)
@@ -234,15 +322,6 @@ void BoardState::UnmakeMove(MoveData moveData)
     pawnKey = moveData.pawnKey;
     pstScore = moveData.pstScore;
     halfMove--;
-
-#ifdef DEBUG
-    if (pieces.Occupancy(friendly, Piece::KING) == 0 || pieces.Occupancy(enemy, Piece::KING) == 0) {
-        ERROR("Missing king after unmaking move: ");
-        moveData.move.Show();
-        pieces.Show();
-        throw JupiterException("King missing");
-    }
-#endif
 }
 
 bool BoardState::WasLegalMove(const AttackTable& attackTable, MoveData moveData) const

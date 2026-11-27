@@ -13,12 +13,13 @@ public:
         m_Data[0] = other.m_Data[0];
         m_Data[1] = other.m_Data[1];
     }
-    void operator=(const TwoStack<T>& other) noexcept
+    TwoStack& operator=(const TwoStack<T>& other) noexcept
     {
         m_Size = other.m_Size;
         m_Index = other.m_Index;
         m_Data[0] = other.m_Data[0];
         m_Data[1] = other.m_Data[1];
+        return *this;
     }
     INLINE void Push(T&& value)
     {

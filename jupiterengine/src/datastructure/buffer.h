@@ -20,10 +20,11 @@ public:
     {
         std::memcpy(m_Data, other.m_Data, capacity * sizeof(T));
     }
-    void operator=(const Buffer<T, capacity>& other) noexcept
+    Buffer<T, capacity>& operator=(const Buffer<T, capacity>& other) noexcept
     {
         m_Size = other.m_Size;
         std::memcpy(m_Data, other.m_Data, capacity * sizeof(T));
+        return *this;
     }
 
     INLINE void PushBack(T &&value)

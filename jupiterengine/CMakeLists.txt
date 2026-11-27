@@ -52,6 +52,9 @@ set(SOURCES
     src/util/fenParser.cpp
     src/util/rng.cpp
     src/util/executionTimer.cpp
+    src/dts/messageQueue.cpp
+    src/dts/manager.cpp
+    src/dts/worker.cpp
 )
 
 # Use module instead of shared so it compiles nicely on mac and linux
